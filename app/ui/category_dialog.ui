@@ -1,0 +1,91 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>CategoryDialog</class>
+ <widget class="QDialog" name="CategoryDialog">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>420</width><height>380</height></rect></property>
+  <property name="windowTitle"><string>Nouvelle catégorie</string></property>
+  <property name="minimumWidth"><number>420</number></property>
+  <property name="maximumWidth"><number>420</number></property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <property name="leftMargin"><number>24</number></property><property name="topMargin"><number>24</number></property>
+   <property name="rightMargin"><number>24</number></property><property name="bottomMargin"><number>24</number></property>
+   <property name="spacing"><number>16</number></property>
+   <item>
+    <layout class="QFormLayout" name="formLayout">
+     <property name="spacing"><number>10</number></property>
+     <item row="0" column="0"><widget class="QLabel" name="lblName"><property name="text"><string>Nom * :</string></property></widget></item>
+     <item row="0" column="1">
+      <widget class="QLineEdit" name="name">
+       <property name="minimumHeight"><number>42</number></property>
+       <property name="placeholderText"><string>Nom de la catégorie</string></property>
+      </widget>
+     </item>
+     <item row="1" column="0"><widget class="QLabel" name="lblDesc"><property name="text"><string>Description :</string></property></widget></item>
+     <item row="1" column="1">
+      <widget class="QTextEdit" name="desc">
+       <property name="maximumHeight"><number>70</number></property>
+       <property name="placeholderText"><string>Description (optionnel)</string></property>
+      </widget>
+     </item>
+     <item row="2" column="0"><widget class="QLabel" name="lblColor"><property name="text"><string>Couleur :</string></property></widget></item>
+     <item row="2" column="1">
+      <widget class="QPushButton" name="colorBtn">
+       <property name="text"><string>  Choisir une couleur</string></property>
+       <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+      </widget>
+     </item>
+     <item row="3" column="0"><widget class="QLabel" name="lblImage"><property name="text"><string>Image :</string></property></widget></item>
+     <item row="3" column="1">
+      <layout class="QHBoxLayout" name="imgRow">
+       <property name="spacing"><number>8</number></property>
+       <item>
+        <widget class="QLabel" name="imgPreview">
+         <property name="text"><string>📷</string></property>
+         <property name="minimumSize"><size><width>72</width><height>72</height></size></property>
+         <property name="maximumSize"><size><width>72</width><height>72</height></size></property>
+         <property name="alignment"><set>Qt::AlignCenter</set></property>
+         <property name="styleSheet"><string>QLabel { border: 2px dashed #D1D5DB; border-radius: 8px; background: #F9FAFB; font-size: 28px; }</string></property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QVBoxLayout" name="imgBtns">
+         <property name="spacing"><number>6</number></property>
+         <item>
+          <widget class="QPushButton" name="btnPickImage">
+           <property name="text"><string>📂  Choisir image</string></property>
+           <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnClearImage">
+           <property name="text"><string>✕  Supprimer image</string></property>
+           <property name="cssClass" stdset="0"><string>btnDanger</string></property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+      </layout>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="btnRow">
+     <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+     <item>
+      <widget class="QPushButton" name="btnCancel">
+       <property name="text"><string>Annuler</string></property>
+       <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnSave">
+       <property name="text"><string>💾  Enregistrer</string></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources /><connections />
+</ui>

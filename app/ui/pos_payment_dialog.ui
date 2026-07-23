@@ -1,0 +1,115 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>POSPaymentDialog</class>
+ <widget class="QDialog" name="POSPaymentDialog">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>420</width><height>380</height></rect></property>
+  <property name="windowTitle"><string>Paiement en espèces</string></property>
+  <property name="minimumWidth"><number>420</number></property>
+  <property name="maximumWidth"><number>420</number></property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property>
+   <property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+   <property name="spacing"><number>0</number></property>
+
+   
+   <item>
+    <widget class="QLabel" name="dialogTitle">
+     <property name="text"><string>  Confirmation de paiement</string></property>
+     <property name="styleSheet"><string>font-size: 15px; font-weight: 700; padding: 16px 20px 12px;</string></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QFrame" name="sep1">
+     <property name="cssClass" stdset="0"><string>separator</string></property>
+     <property name="frameShape"><enum>QFrame::HLine</enum></property>
+    </widget>
+   </item>
+
+   
+   <item>
+    <layout class="QVBoxLayout" name="bodyLayout">
+     <property name="leftMargin"><number>24</number></property><property name="topMargin"><number>16</number></property>
+     <property name="rightMargin"><number>24</number></property><property name="bottomMargin"><number>16</number></property>
+     <property name="spacing"><number>12</number></property>
+     <item>
+      <widget class="QLabel" name="summaryLbl">
+       <property name="text"><string>0 article(s)</string></property>
+       <property name="styleSheet"><string>color: #6B7280; font-size: 12px;</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="totalAmountLbl">
+       <property name="text"><string>0.000 TND</string></property>
+       <property name="alignment"><set>Qt::AlignCenter</set></property>
+       <property name="styleSheet"><string>font-size: 36px; font-weight: 800; color: #059669; letter-spacing: -1px;</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QFrame" name="sep2">
+       <property name="cssClass" stdset="0"><string>separator</string></property>
+       <property name="frameShape"><enum>QFrame::HLine</enum></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="lblReceived">
+       <property name="text"><string>Montant reçu :</string></property>
+       <property name="styleSheet"><string>font-size: 12px; font-weight: 600; color: #6B7280;</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="PriceSpinBox" name="paid">
+       <property name="minimumHeight"><number>52</number></property>
+       <property name="maximum"><double>999999.000000000000000</double></property>
+       <property name="decimals"><number>3</number></property>
+       <property name="styleSheet"><string>font-size: 18px; font-weight: 700;</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="changeLbl">
+       <property name="text"><string>Monnaie : 0.000 TND</string></property>
+       <property name="alignment"><set>Qt::AlignCenter</set></property>
+       <property name="styleSheet"><string>font-size: 20px; font-weight: 700; color: #059669; background: #ECFDF5; border-radius: 8px; padding: 10px 14px;</string></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+
+   <item>
+    <widget class="QFrame" name="sep3">
+     <property name="cssClass" stdset="0"><string>separator</string></property>
+     <property name="frameShape"><enum>QFrame::HLine</enum></property>
+    </widget>
+   </item>
+
+   
+   <item>
+    <layout class="QHBoxLayout" name="btnRow">
+     <property name="leftMargin"><number>24</number></property><property name="topMargin"><number>14</number></property>
+     <property name="rightMargin"><number>24</number></property><property name="bottomMargin"><number>14</number></property>
+     <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+     <item>
+      <widget class="QPushButton" name="btnCancel">
+       <property name="text"><string>Annuler</string></property>
+       <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+       <property name="minimumHeight"><number>40</number></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnOk">
+       <property name="text"><string>🖨  Valider et imprimer</string></property>
+       <property name="minimumHeight"><number>40</number></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>PriceSpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>app/views/widgets/price_input.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources /><connections />
+</ui>

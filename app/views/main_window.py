@@ -1,0 +1,496 @@
+from __future__ import annotations
+
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+from PySide6.QtCore import Qt, QTimer
+
+from app.controllers.auth_controller import AuthController
+from app.views.dashboard_view import DashboardView
+from app.views.pos_view import POSView
+from app.views.products_view import ProductsView
+from app.views.categories_view import CategoriesView
+from app.views.suppliers_view import SuppliersView
+from app.views.stock_view import StockView
+from app.views.sales_view import SalesView
+from app.views.customers_view import CustomersView
+from app.views.users_view import UsersView
+from app.views.expenses_view import ExpensesView
+from app.views.settings_view import SettingsView
+from app.views.dialog_theme import apply_light_messagebox_theme, light_information, light_warning
+from config import APP_NAME, APP_VERSION, ASSETS_DIR
+
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
+        self.setMinimumSize(1280, 800)
+
+        self._pages: dict[str, QWidget] = {}
+        self._nav_buttons: dict[str, QPushButton] = {}
+        self._current_page = ""
+
+        self._build_ui()
+        self._apply_role()
+
+        self._backup_timer = QTimer(self)
+        self._backup_timer.timeout.connect(self._auto_backup)
+        self._backup_timer.start(86_400_000)
+
+    def _build_ui(self):
+        central = QWidget()
+        central.setObjectName("mainCentralWidget")
+        self.setCentralWidget(central)
+
+        root = QVBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self._topnav = QFrame()
+        self._topnav.setObjectName("topNavBar")
+
+        topnav_layout = QVBoxLayout(self._topnav)
+        topnav_layout.setContentsMargins(16, 10, 16, 10)
+        topnav_layout.setSpacing(8)
+
+        header_row = QHBoxLayout()
+        header_row.setSpacing(10)
+
+        logo = QLabel("🏪")
+        logo.setObjectName("appLogo")
+        header_row.addWidget(logo)
+
+        app_title = QLabel(APP_NAME)
+        app_title.setObjectName("appTitle")
+        header_row.addWidget(app_title)
+
+        header_row.addStretch()
+
+        self._clock_lbl = QLabel()
+        self._clock_lbl.setObjectName("clockLabel")
+        header_row.addWidget(self._clock_lbl)
+
+        self._user_info_lbl = QLabel()
+        self._user_info_lbl.setObjectName("userInfoLabel")
+        header_row.addWidget(self._user_info_lbl)
+
+        self._btn_logout = QPushButton("⏻  Déconnexion")
+        self._btn_logout.setObjectName("btnLogout")
+        self._btn_logout.setFixedHeight(36)
+        self._btn_logout.setStyleSheet(
+            "font-size: 11px; font-weight: 700; padding: 0 14px;"
+            "background: #DC2626; color: white; border: 1px solid #B91C1C; border-radius: 10px;"
+            "selection-background-color: #FCA5A5;"
+        )
+        self._btn_logout.clicked.connect(self._logout)
+        header_row.addWidget(self._btn_logout)
+
+        topnav_layout.addLayout(header_row)
+
+        self._nav_items = [
+            ("dashboard", "📊", "Dashboard"),
+            ("pos", "🛒", "Caisse"),
+            ("products", "📦", "Produits"),
+            ("categories", "🏷️", "Catégories"),
+            ("suppliers", "🚚", "Fournisseurs"),
+            ("stock", "📋", "Stock"),
+            ("sales", "💰", "Ventes"),
+            ("customers", "👥", "Clients"),
+            ("expenses", "💸", "Dépenses"),
+            ("users", "👤", "Utilisateurs"),
+            ("settings", "⚙️", "Paramètres"),
+        ]
+
+        self._nav_container = QWidget()
+        self._nav_container.setObjectName("topNavLinksRow")
+        self._nav_hlayout = QHBoxLayout(self._nav_container)
+        self._nav_hlayout.setContentsMargins(0, 0, 0, 0)
+        self._nav_hlayout.setSpacing(6)
+
+        topnav_layout.addWidget(self._nav_container)
+        root.addWidget(self._topnav)
+
+        self._topbar = QFrame()
+        self._topbar.setObjectName("topBar")
+        self._topbar.setFixedHeight(50)
+
+        topbar_layout = QHBoxLayout(self._topbar)
+        self._topbar_layout = topbar_layout
+        topbar_layout.setContentsMargins(24, 0, 24, 0)
+        topbar_layout.setSpacing(10)
+
+        self._page_title = QLabel("Tableau de bord")
+        self._page_title.setObjectName("pageTitle")
+        topbar_layout.addWidget(self._page_title)
+
+        self._pos_cash_lbl = QLabel("")
+        self._pos_cash_lbl.setVisible(False)
+        self._pos_cash_lbl.setStyleSheet(
+            "font-size: 12px; font-weight: 800; color: #0F172A;"
+            "background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 5px 10px;"
+        )
+        topbar_layout.addWidget(self._pos_cash_lbl)
+
+        topbar_layout.addStretch()
+
+        self._pos_topbar_widget = QWidget()
+        self._pos_topbar_widget.setVisible(False)
+        self._pos_topbar_widget.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+
+        pos_topbar_layout = QHBoxLayout(self._pos_topbar_widget)
+        self._pos_topbar_layout = pos_topbar_layout
+        pos_topbar_layout.setContentsMargins(0, 0, 90, 0)
+        pos_topbar_layout.setSpacing(0)
+
+        self._pos_cart_title_lbl = QLabel("Panier")
+        self._pos_cart_title_lbl.setStyleSheet("font-size: 13px; font-weight: 800; color: #0F172A;")
+
+        self._pos_cart_total_lbl = QLabel("0.000 TND")
+        self._pos_cart_total_lbl.setStyleSheet("font-size: 16px; font-weight: 900; color: #059669;")
+
+        self._pos_clear_btn = QPushButton("Vider")
+        self._pos_clear_btn.setObjectName("btnDanger")
+        self._pos_clear_btn.setFixedSize(82, 30)
+        self._pos_clear_btn.setStyleSheet("font-size: 10px; font-weight: 800; padding: 0 8px;")
+        self._pos_clear_btn.clicked.connect(self._clear_pos_cart)
+
+        pos_topbar_layout.addWidget(self._pos_cart_title_lbl)
+        pos_topbar_layout.addSpacing(18)
+        pos_topbar_layout.addWidget(self._pos_cart_total_lbl)
+        pos_topbar_layout.addSpacing(18)
+        pos_topbar_layout.addWidget(self._pos_clear_btn)
+
+        topbar_layout.addWidget(self._pos_topbar_widget, 0, Qt.AlignRight | Qt.AlignVCenter)
+
+        root.addWidget(self._topbar)
+
+        self._stack = QStackedWidget()
+        self._stack.setObjectName("mainStack")
+        root.addWidget(self._stack, 1)
+
+        self._clock_timer = QTimer(self)
+        self._clock_timer.timeout.connect(self._update_clock)
+        self._clock_timer.start(1000)
+        self._update_clock()
+
+
+    def _allowed_pages(self) -> set[str]:
+        if AuthController.is_admin():
+            return {
+                "dashboard",
+                "pos",
+                "products",
+                "categories",
+                "suppliers",
+                "stock",
+                "sales",
+                "customers",
+                "expenses",
+                "users",
+                "settings",
+            }
+        return {"pos"}
+
+    def _can_access_page(self, page_id: str) -> bool:
+        return page_id in self._allowed_pages()
+
+    def navigate(self, page_id: str):
+        if not self._can_access_page(page_id):
+            page_id = "pos"
+
+        if page_id not in self._pages:
+            self._pages[page_id] = self._create_page(page_id)
+            self._stack.addWidget(self._pages[page_id])
+
+        page_widget = self._pages[page_id]
+        self._stack.setCurrentWidget(page_widget)
+        self._current_page = page_id
+
+        titles = {
+            "dashboard": "📊  Tableau de bord",
+            "pos": "🛒  Caisse — Point de Vente",
+            "products": "📦  Gestion des produits",
+            "categories": "🏷️  Catégories",
+            "suppliers": "🚚  Fournisseurs",
+            "stock": "📋  Gestion du stock",
+            "sales": "💰  Historique des ventes",
+            "customers": "👥  Clients & Crédits",
+            "expenses": "💸  Dépenses",
+            "users": "👤  Gestion des utilisateurs",
+            "settings": "⚙️  Paramètres",
+        }
+        self._page_title.setText(titles.get(page_id, page_id))
+
+        for pid, btn in self._nav_buttons.items():
+            btn.setChecked(pid == page_id)
+
+        self._pos_topbar_widget.setVisible(page_id == "pos")
+        self._pos_cash_lbl.setVisible(page_id == "pos" and not AuthController.is_admin())
+        if page_id == "pos":
+            pos_view = self._extract_page_content(page_widget)
+            emit_summary = getattr(pos_view, "emit_cart_summary", None)
+            if callable(emit_summary):
+                emit_summary()
+            emit_cash = getattr(pos_view, "_update_cash_expected_label", None)
+            if callable(emit_cash):
+                emit_cash()
+
+        if page_id != "customers":
+            self._refresh_page_widget(page_widget)
+
+    def _clear_pos_cart(self):
+        pos_page = self._pages.get("pos")
+        if pos_page is None:
+            return
+        clear_cart = getattr(pos_page, "clear_cart_from_header", None)
+        if callable(clear_cart):
+            clear_cart()
+
+    def _update_pos_topbar(self, total_text: str, has_items: bool):
+        self._pos_cart_total_lbl.setText(total_text)
+        self._pos_clear_btn.setEnabled(has_items)
+
+    def _update_pos_cash_label(self, text: str, tooltip: str = ""):
+        self._pos_cash_lbl.setText(text)
+        self._pos_cash_lbl.setToolTip(tooltip or "")
+
+    def _apply_cashier_topbar_style(self, compact: bool):
+        if compact:
+            self._topbar.setFixedHeight(42)
+            self._topbar.setStyleSheet("QFrame#topBar { background: transparent; border: none; }")
+            self._topbar_layout.setContentsMargins(0, 4, 24, 2)
+            self._pos_topbar_layout.setContentsMargins(0, 0, 24, 0)
+        else:
+            self._topbar.setFixedHeight(50)
+            self._topbar.setStyleSheet("")
+            self._topbar_layout.setContentsMargins(24, 0, 24, 0)
+            self._pos_topbar_layout.setContentsMargins(0, 0, 90, 0)
+
+    def _refresh_page_widget(self, page_widget: QWidget):
+        target = self._extract_page_content(page_widget)
+        refresh = getattr(target, "refresh", None)
+        if callable(refresh):
+            try:
+                refresh()
+            except Exception:
+                pass
+
+    def refresh_pages(self, page_ids: set[str] | None = None, include_current: bool = True):
+        for pid, page_widget in self._pages.items():
+            if page_ids is not None and pid not in page_ids:
+                continue
+            if not include_current and pid == self._current_page:
+                continue
+            self._refresh_page_widget(page_widget)
+
+    def _extract_page_content(self, page_widget: QWidget) -> QWidget:
+        if isinstance(page_widget, QScrollArea):
+            container = page_widget.widget()
+            if container is not None and container.layout() is not None and container.layout().count():
+                item = container.layout().itemAt(0)
+                if item is not None and item.widget() is not None:
+                    return item.widget()
+        return page_widget
+
+    def _wrap_page_with_scroll(self, page: QWidget) -> QWidget:
+        scroll = QScrollArea()
+        scroll.setObjectName("pageScrollArea")
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        container = QWidget()
+        container.setObjectName("pageScrollContainer")
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(0)
+        container_layout.addWidget(page)
+        scroll.setWidget(container)
+        return scroll
+
+    def _create_page(self, page_id: str) -> QWidget:
+        if page_id == "dashboard":
+            view = DashboardView()
+            view.tile_clicked.connect(self.navigate)
+            return self._wrap_page_with_scroll(view)
+        if page_id == "pos":
+            view = POSView()
+            view.cart_summary_changed.connect(self._update_pos_topbar)
+            view.cash_expected_changed.connect(self._update_pos_cash_label)
+            return view
+        if page_id == "products":
+            return self._wrap_page_with_scroll(ProductsView())
+        if page_id == "categories":
+            return self._wrap_page_with_scroll(CategoriesView())
+        if page_id == "suppliers":
+            return self._wrap_page_with_scroll(SuppliersView())
+        if page_id == "stock":
+            return self._wrap_page_with_scroll(StockView())
+        if page_id == "sales":
+            return self._wrap_page_with_scroll(SalesView())
+        if page_id == "customers":
+            return CustomersView()
+        if page_id == "expenses":
+            return self._wrap_page_with_scroll(ExpensesView())
+        if page_id == "users":
+            return self._wrap_page_with_scroll(UsersView())
+        if page_id == "settings":
+            return self._wrap_page_with_scroll(SettingsView())
+        return self._wrap_page_with_scroll(QWidget())
+
+    def _apply_theme(self, theme: str):
+        qss_path = ASSETS_DIR / "themes" / f"{theme}.qss"
+        if qss_path.exists():
+            QApplication.instance().setStyleSheet(qss_path.read_text(encoding="utf-8"))
+
+    def _update_clock(self):
+        from datetime import datetime
+        self._clock_lbl.setText(datetime.now().strftime("  %d/%m/%Y   %H:%M:%S"))
+
+    def _apply_role(self):
+        is_admin = AuthController.is_admin()
+        user = AuthController.current_user()
+
+        name = user.get("full_name", user.get("username", ""))
+        role_text = "Administrateur" if user.get("role") == "admin" else "Caissier"
+        self._user_info_lbl.setText(f"👤 {name} • {role_text}")
+
+        self._rebuild_nav()
+
+        self._topnav.setVisible(is_admin)
+        self._topbar.setVisible(True)
+        self._page_title.setVisible(is_admin)
+        self._apply_cashier_topbar_style(not is_admin)
+
+        if not is_admin:
+            self.navigate("pos")
+        else:
+            self.navigate("dashboard")
+
+    def _logout(self):
+        reply = QMessageBox.question(
+            self,
+            "Déconnexion",
+            "Voulez-vous vous déconnecter ?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        AuthController.logout()
+        self.hide()
+
+        from app.views.login_dialog import LoginDialog
+
+        login = LoginDialog()
+        if login.exec():
+            self._pages.clear()
+            while self._stack.count():
+                self._stack.removeWidget(self._stack.widget(0))
+            self._apply_role()
+            self.showMaximized()
+        else:
+            QApplication.quit()
+
+    def _rebuild_nav(self):
+        for btn in list(self._nav_buttons.values()):
+            self._nav_hlayout.removeWidget(btn)
+            btn.setParent(None)
+            btn.deleteLater()
+        self._nav_buttons.clear()
+
+        allowed_pages = self._allowed_pages()
+
+        for page_id, icon, label in self._nav_items:
+            if page_id not in allowed_pages:
+                continue
+
+            btn = QPushButton(f"{icon} {label}")
+            btn.setObjectName("topNavBtn")
+            btn.setCheckable(True)
+            btn.setMinimumHeight(36)
+            btn.clicked.connect(lambda _, pid=page_id: self.navigate(pid))
+
+            self._nav_buttons[page_id] = btn
+            self._nav_hlayout.addWidget(btn)
+
+        self._nav_hlayout.addStretch()
+
+    def _pos_view(self):
+        page_widget = self._pages.get("pos")
+        if page_widget is None:
+            return None
+        return self._extract_page_content(page_widget)
+
+    def _prompt_cashier_exit_action(self) -> str:
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Question)
+        box.setWindowTitle("Fermeture caisse")
+        box.setText("Choisissez l'action pour la caisse.")
+        btn_pause = box.addButton("Pause", QMessageBox.ActionRole)
+        btn_finish = box.addButton("Terminer travail", QMessageBox.AcceptRole)
+        btn_cancel = box.addButton("Annuler", QMessageBox.RejectRole)
+        box.setDefaultButton(btn_finish)
+        apply_light_messagebox_theme(box)
+        box.exec()
+
+        clicked = box.clickedButton()
+        if clicked is btn_pause:
+            return "pause"
+        if clicked is btn_finish:
+            return "finish"
+        return "cancel"
+
+    def closeEvent(self, event):
+        user = AuthController.current_user() or {}
+        if str(user.get("role") or "").strip().lower() != "cashier":
+            return super().closeEvent(event)
+
+        pos_view = self._pos_view()
+        if pos_view is None:
+            return super().closeEvent(event)
+
+        action = self._prompt_cashier_exit_action()
+        if action == "cancel":
+            event.ignore()
+            return
+
+        if action == "pause":
+            ok, message = pos_view.pause_current_shift()
+            if not ok:
+                light_warning(self, "Pause impossible", message)
+                event.ignore()
+                return
+            return super().closeEvent(event)
+
+        summary = pos_view.finish_current_shift()
+        light_information(
+            self,
+            "Fin de travail",
+            (
+                f"Montant attendu en caisse : {summary.get('expected_cash_text', '0.000 TND')}\n"
+                f"Ouverture : {summary.get('opening_cash_text', '0.000 TND')}\n"
+                f"Encaissements : {summary.get('total_received_text', '0.000 TND')}"
+            ),
+        )
+        return super().closeEvent(event)
+
+    def _auto_backup(self):
+        try:
+            from app.database.backup import create_backup
+            create_backup()
+        except Exception:
+            pass

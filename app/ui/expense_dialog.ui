@@ -1,0 +1,66 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>ExpenseDialog</class>
+ <widget class="QDialog" name="ExpenseDialog">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>380</width><height>280</height></rect></property>
+  <property name="windowTitle"><string>Nouvelle dépense</string></property>
+  <property name="minimumWidth"><number>380</number></property>
+  <property name="maximumWidth"><number>380</number></property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <property name="leftMargin"><number>24</number></property><property name="topMargin"><number>24</number></property>
+   <property name="rightMargin"><number>24</number></property><property name="bottomMargin"><number>24</number></property>
+   <property name="spacing"><number>16</number></property>
+   <item>
+    <layout class="QFormLayout" name="formLayout">
+     <property name="spacing"><number>12</number></property>
+     <item row="0" column="0"><widget class="QLabel" name="lblCategory"><property name="text"><string>Catégorie :</string></property></widget></item>
+     <item row="0" column="1">
+      <widget class="QComboBox" name="category">
+       <property name="minimumHeight"><number>42</number></property>
+      </widget>
+     </item>
+     <item row="1" column="0"><widget class="QLabel" name="lblAmount"><property name="text"><string>Montant * :</string></property></widget></item>
+     <item row="1" column="1">
+      <widget class="PriceSpinBox" name="amount">
+       <property name="minimumHeight"><number>42</number></property>
+       <property name="maximum"><double>999999.000000000000000</double></property>
+       <property name="decimals"><number>3</number></property>
+       <property name="suffix"><string>  TND</string></property>
+      </widget>
+     </item>
+     <item row="2" column="0"><widget class="QLabel" name="lblDesc"><property name="text"><string>Description :</string></property></widget></item>
+     <item row="2" column="1">
+      <widget class="QLineEdit" name="desc">
+       <property name="minimumHeight"><number>42</number></property>
+       <property name="placeholderText"><string>Description optionnelle…</string></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="btnRow">
+     <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+     <item>
+      <widget class="QPushButton" name="btnCancel">
+       <property name="text"><string>Annuler</string></property>
+       <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnSave">
+       <property name="text"><string>💾  Enregistrer</string></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>PriceSpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>app/views/widgets/price_input.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources /><connections />
+</ui>

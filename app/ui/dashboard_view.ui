@@ -1,0 +1,164 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>DashboardView</class>
+ <widget class="QWidget" name="DashboardView">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>1000</width><height>700</height></rect></property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="leftMargin"><number>24</number></property><property name="topMargin"><number>20</number></property>
+   <property name="rightMargin"><number>24</number></property><property name="bottomMargin"><number>24</number></property>
+   <property name="spacing"><number>20</number></property>
+
+   
+   <item>
+    <layout class="QHBoxLayout" name="topRow">
+     <property name="spacing"><number>16</number></property>
+     <item>
+      <layout class="QVBoxLayout" name="greetCol">
+       <item>
+        <widget class="QLabel" name="greeting">
+         <property name="text"><string>Tableau de bord</string></property>
+         <property name="styleSheet"><string>font-size: 22px; font-weight: 700; color: #1B2A4A;</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="dateLbl">
+         <property name="text"><string /></property>
+         <property name="styleSheet"><string>color: #64748B; font-size: 13px;</string></property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <spacer><property name="orientation"><enum>Qt::Horizontal</enum></property></spacer>
+     </item>
+     <item>
+      <widget class="QFrame" name="companyBanner">
+       <property name="objectName"><string>companyBanner</string></property>
+       <property name="fixedHeight"><number>70</number></property>
+       <layout class="QVBoxLayout" name="bannerLayout">
+        <property name="leftMargin"><number>20</number></property><property name="topMargin"><number>10</number></property>
+        <property name="rightMargin"><number>20</number></property><property name="bottomMargin"><number>10</number></property>
+        <property name="spacing"><number>2</number></property>
+        <item>
+         <widget class="QLabel" name="companyName">
+          <property name="text"><string>SOLUTIONS STOREMANAGER PRO</string></property>
+          <property name="styleSheet"><string>font-size: 14px; font-weight: 700; color: #FFFFFF;</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="companyPhone">
+          <property name="text"><string>📞 +216 XX XXX XXX</string></property>
+          <property name="styleSheet"><string>font-size: 12px; color: rgba(255,255,255,0.8);</string></property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnRefresh">
+       <property name="text"><string>↻  Actualiser</string></property>
+       <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+       <property name="fixedWidth"><number>120</number></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+
+   
+   <item>
+    <widget class="QWidget" name="tileGridWidget">
+     <layout class="QGridLayout" name="tileGrid">
+      <property name="spacing"><number>16</number></property>
+      <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property>
+      <property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QWidget" name="kpiRow">
+     <layout class="QGridLayout" name="kpiLayout">
+      <property name="spacing"><number>14</number></property>
+      <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property>
+      <property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QWidget" name="monthRow">
+     <layout class="QHBoxLayout" name="monthLayout">
+      <property name="spacing"><number>14</number></property>
+      <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property>
+      <property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <layout class="QHBoxLayout" name="bottomRow">
+     <property name="spacing"><number>16</number></property>
+     <item>
+      <widget class="QFrame" name="lowStockFrame">
+       <property name="cssClass" stdset="0"><string>statCard</string></property>
+       <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding" /></property>
+       <layout class="QVBoxLayout" name="lowStockLayout">
+        <property name="leftMargin"><number>16</number></property><property name="topMargin"><number>16</number></property>
+        <property name="rightMargin"><number>16</number></property><property name="bottomMargin"><number>16</number></property>
+        <item>
+         <widget class="QLabel" name="lblLowStockTitle">
+          <property name="text"><string>⚠️  Produits en stock faible</string></property>
+          <property name="styleSheet"><string>font-weight: 700; font-size: 15px;</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QScrollArea" name="lowStockScroll">
+          <property name="widgetResizable"><bool>true</bool></property>
+          <property name="frameShape"><enum>QFrame::NoFrame</enum></property>
+          <widget class="QWidget" name="lowStockInner">
+           <layout class="QVBoxLayout" name="lowStockInnerLayout">
+            <property name="spacing"><number>4</number></property>
+           </layout>
+          </widget>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
+      <widget class="QFrame" name="topProductsFrame">
+       <property name="cssClass" stdset="0"><string>statCard</string></property>
+       <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding" /></property>
+       <layout class="QVBoxLayout" name="topProductsLayout">
+        <property name="leftMargin"><number>16</number></property><property name="topMargin"><number>16</number></property>
+        <property name="rightMargin"><number>16</number></property><property name="bottomMargin"><number>16</number></property>
+        <item>
+         <widget class="QLabel" name="lblTopTitle">
+          <property name="text"><string>🏆  Top produits (ce mois)</string></property>
+          <property name="styleSheet"><string>font-weight: 700; font-size: 15px;</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QScrollArea" name="topScroll">
+          <property name="widgetResizable"><bool>true</bool></property>
+          <property name="frameShape"><enum>QFrame::NoFrame</enum></property>
+          <widget class="QWidget" name="topInner">
+           <layout class="QVBoxLayout" name="topInnerLayout">
+            <property name="spacing"><number>4</number></property>
+           </layout>
+          </widget>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+   </item>
+
+  </layout>
+ </widget>
+ <resources /><connections />
+</ui>

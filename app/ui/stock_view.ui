@@ -1,0 +1,107 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>StockView</class>
+ <widget class="QWidget" name="StockView">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>1000</width><height>700</height></rect></property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="leftMargin"><number>24</number></property><property name="topMargin"><number>24</number></property>
+   <property name="rightMargin"><number>24</number></property><property name="bottomMargin"><number>24</number></property>
+   <property name="spacing"><number>16</number></property>
+
+   
+   <item>
+    <widget class="QFrame" name="invFrame">
+     <property name="cssClass" stdset="0"><string>statCard</string></property>
+     <layout class="QHBoxLayout" name="invLayout">
+      <property name="spacing"><number>0</number></property>
+      <item>
+       <widget class="QLabel" name="lblPurchase">
+        <property name="text"><string>&lt;b&gt;Valeur achat&lt;/b&gt;&lt;br&gt;0.000 TND</string></property>
+        <property name="alignment"><set>Qt::AlignCenter</set></property>
+        <property name="styleSheet"><string>font-size: 14px;</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lblSale">
+        <property name="text"><string>&lt;b&gt;Valeur vente&lt;/b&gt;&lt;br&gt;0.000 TND</string></property>
+        <property name="alignment"><set>Qt::AlignCenter</set></property>
+        <property name="styleSheet"><string>font-size: 14px;</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lblCount">
+        <property name="text"><string>&lt;b&gt;Produits&lt;/b&gt;&lt;br&gt;0</string></property>
+        <property name="alignment"><set>Qt::AlignCenter</set></property>
+        <property name="styleSheet"><string>font-size: 14px;</string></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <layout class="QHBoxLayout" name="toolbar">
+     <property name="spacing"><number>8</number></property>
+     <item>
+      
+      <widget class="QLineEdit" name="searchBar">
+       <property name="placeholderText"><string>🔍  Rechercher un produit…</string></property>
+       <property name="minimumHeight"><number>42</number></property>
+       <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Fixed" /></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnAdjust">
+       <property name="text"><string>📋  Ajustement stock</string></property>
+       <property name="cssClass" stdset="0"><string>btnWarning</string></property>
+       <property name="minimumHeight"><number>42</number></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnEntry">
+       <property name="text"><string>📦  Entrée stock</string></property>
+       <property name="cssClass" stdset="0"><string>btnSuccess</string></property>
+       <property name="minimumHeight"><number>42</number></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnScan">
+       <property name="text"><string>📄  Saisie facture</string></property>
+       <property name="cssClass" stdset="0"><string>btnWarning</string></property>
+       <property name="minimumHeight"><number>42</number></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+
+   
+   <item>
+    <widget class="QLabel" name="lblMovements">
+     <property name="text"><string>Historique des mouvements de stock</string></property>
+     <property name="styleSheet"><string>font-size: 15px; font-weight: 600;</string></property>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QTableWidget" name="movementsTable">
+     <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding" /></property>
+     <property name="alternatingRowColors"><bool>true</bool></property>
+     <property name="selectionBehavior"><enum>QAbstractItemView::SelectRows</enum></property>
+     <property name="editTriggers"><set>QAbstractItemView::NoEditTriggers</set></property>
+     <property name="columnCount"><number>7</number></property>
+     <column><property name="text"><string>Date</string></property></column>
+     <column><property name="text"><string>Produit</string></property></column>
+     <column><property name="text"><string>Type</string></property></column>
+     <column><property name="text"><string>Quantité</string></property></column>
+     <column><property name="text"><string>Référence</string></property></column>
+     <column><property name="text"><string>Notes</string></property></column>
+     <column><property name="text"><string>Utilisateur</string></property></column>
+    </widget>
+   </item>
+
+  </layout>
+ </widget>
+ <resources /><connections />
+</ui>

@@ -1,0 +1,162 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>BarcodeBatchImportDialog</class>
+ <widget class="QDialog" name="BarcodeBatchImportDialog">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>660</width><height>560</height></rect></property>
+  <property name="windowTitle"><string>Scan codes-barres produits</string></property>
+  <property name="minimumSize"><size><width>660</width><height>560</height></size></property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property>
+   <property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+   <property name="spacing"><number>0</number></property>
+
+   
+   <item>
+    <widget class="QFrame" name="header">
+     <property name="minimumHeight"><number>52</number></property>
+     <property name="maximumHeight"><number>52</number></property>
+     <property name="styleSheet"><string>QFrame { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #059669, stop:1 #047857); }</string></property>
+     <layout class="QHBoxLayout" name="headerLayout">
+      <property name="leftMargin"><number>20</number></property><property name="topMargin"><number>0</number></property>
+      <property name="rightMargin"><number>20</number></property><property name="bottomMargin"><number>0</number></property>
+      <item>
+       <widget class="QLabel" name="headerTitle">
+        <property name="text"><string>📷  Scan lot codes-barres / QR codes</string></property>
+        <property name="styleSheet"><string>font-size: 15px; font-weight: 700; color: white; background: transparent; border: none;</string></property>
+        <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Preferred" /></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="countLbl">
+        <property name="text"><string>0 code(s)</string></property>
+        <property name="styleSheet"><string>font-size: 12px; color: rgba(255,255,255,0.8); background: transparent; border: none;</string></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QFrame" name="inputFrame">
+     <property name="styleSheet"><string>QFrame { background: #F9FAFB; border-bottom: 1px solid #E5E7EB; } QLabel { background: transparent; border: none; color: #374151; }</string></property>
+     <layout class="QHBoxLayout" name="inputLayout">
+      <property name="leftMargin"><number>16</number></property><property name="topMargin"><number>12</number></property>
+      <property name="rightMargin"><number>16</number></property><property name="bottomMargin"><number>12</number></property>
+      <property name="spacing"><number>8</number></property>
+      <item>
+       <widget class="QLabel" name="lblCode">
+        <property name="text"><string>Code :</string></property>
+        <property name="minimumWidth"><number>52</number></property>
+        <property name="styleSheet"><string>font-weight: 600; font-size: 12px; color: #374151; background: transparent; border: none;</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="codeInput">
+        <property name="minimumHeight"><number>40</number></property>
+        <property name="placeholderText"><string>Code-barres ou référence produit…</string></property>
+        <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Fixed" /></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnScan">
+        <property name="text"><string>📷  Scanner</string></property>
+        <property name="minimumHeight"><number>40</number></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnAdd">
+        <property name="text"><string>＋  Ajouter</string></property>
+        <property name="cssClass" stdset="0"><string>btnSuccess</string></property>
+        <property name="minimumHeight"><number>40</number></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QFrame" name="legendFrame">
+     <property name="styleSheet"><string>QFrame { background: #FFFFFF; border-bottom: 1px solid #F3F4F6; }</string></property>
+     <layout class="QHBoxLayout" name="legendLayout">
+      <property name="leftMargin"><number>16</number></property><property name="topMargin"><number>6</number></property>
+      <property name="rightMargin"><number>16</number></property><property name="bottomMargin"><number>6</number></property>
+      <property name="spacing"><number>20</number></property>
+      <item>
+       <widget class="QLabel" name="legendOk">
+        <property name="text"><string>✅  Produit trouvé en base</string></property>
+        <property name="styleSheet"><string>font-size: 11px; color: #059669; background: transparent; border: none;</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="legendNok">
+        <property name="text"><string>❌  Inconnu — cadre rouge — cliquer ＋ pour créer</string></property>
+        <property name="styleSheet"><string>font-size: 11px; color: #DC2626; background: transparent; border: none;</string></property>
+       </widget>
+      </item>
+      <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QScrollArea" name="listScroll">
+     <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding" /></property>
+     <property name="widgetResizable"><bool>true</bool></property>
+     <property name="frameShape"><enum>QFrame::NoFrame</enum></property>
+     <widget class="QWidget" name="listWidget">
+      <layout class="QVBoxLayout" name="listLayout">
+       <property name="leftMargin"><number>16</number></property><property name="topMargin"><number>12</number></property>
+       <property name="rightMargin"><number>16</number></property><property name="bottomMargin"><number>12</number></property>
+       <property name="spacing"><number>8</number></property>
+       <item>
+        <widget class="QLabel" name="emptyLbl">
+         <property name="text"><string>Scannez ou saisissez un code-barres pour commencer</string></property>
+         <property name="alignment"><set>Qt::AlignCenter</set></property>
+         <property name="styleSheet"><string>color: #9CA3AF; font-size: 14px; padding: 40px; background: transparent; border: none;</string></property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QFrame" name="footer">
+     <property name="styleSheet"><string>QFrame { background: #FFFFFF; border-top: 1.5px solid #E5E7EB; }</string></property>
+     <layout class="QHBoxLayout" name="footerLayout">
+      <property name="leftMargin"><number>20</number></property><property name="topMargin"><number>12</number></property>
+      <property name="rightMargin"><number>20</number></property><property name="bottomMargin"><number>12</number></property>
+      <property name="spacing"><number>10</number></property>
+      <item>
+       <widget class="QLabel" name="summaryLbl">
+        <property name="text"><string /></property>
+        <property name="styleSheet"><string>color: #6B7280; font-size: 12px; background: transparent; border: none;</string></property>
+        <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Preferred" /></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnClearAll">
+        <property name="text"><string>🗑  Effacer tout</string></property>
+        <property name="cssClass" stdset="0"><string>btnDanger</string></property>
+        <property name="minimumHeight"><number>38</number></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnClose">
+        <property name="text"><string>Fermer</string></property>
+        <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+        <property name="minimumHeight"><number>38</number></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+  </layout>
+ </widget>
+ <resources /><connections />
+</ui>

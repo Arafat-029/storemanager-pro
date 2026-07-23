@@ -1,0 +1,20 @@
+# Environnement virtuel
+.venv/
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Variables d'environnement
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Système
+.DS_Store
+
+data/store.db
+data/product_images/

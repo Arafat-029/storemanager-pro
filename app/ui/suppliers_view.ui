@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>SuppliersView</class>
+ <widget class="QWidget" name="SuppliersView">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>1000</width><height>700</height></rect></property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="leftMargin"><number>24</number></property><property name="topMargin"><number>20</number></property>
+   <property name="rightMargin"><number>24</number></property><property name="bottomMargin"><number>20</number></property>
+   <property name="spacing"><number>16</number></property>
+
+   <!-- Header -->
+   <item>
+    <layout class="QHBoxLayout" name="header">
+     <item>
+      <widget class="QLabel" name="titleLbl">
+       <property name="text"><string>Gestion des fournisseurs</string></property>
+       <property name="styleSheet"><string>font-size: 20px; font-weight: 700; color: #111827;</string></property>
+      </widget>
+     </item>
+     <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+     <item>
+      <widget class="QLineEdit" name="search">
+       <property name="placeholderText"><string>🔍  Rechercher par nom ou téléphone…</string></property>
+       <property name="minimumHeight"><number>40</number></property>
+       <property name="maximumWidth"><number>320</number></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnAdd">
+       <property name="text"><string>＋  Nouveau fournisseur</string></property>
+       <property name="minimumHeight"><number>40</number></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+
+   <!-- Stats bar -->
+   <item>
+    <widget class="QLabel" name="statsLbl">
+     <property name="text"><string>  0 fournisseur(s)</string></property>
+     <property name="styleSheet"><string>background: #EFF6FF; color: #1D4ED8; border-radius: 8px; padding: 8px 14px; font-size: 13px;</string></property>
+    </widget>
+   </item>
+
+   <!-- Table -->
+   <item>
+    <widget class="QTableWidget" name="table">
+     <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding"/></property>
+     <property name="alternatingRowColors"><bool>true</bool></property>
+     <property name="selectionBehavior"><enum>QAbstractItemView::SelectRows</enum></property>
+     <property name="editTriggers"><set>QAbstractItemView::NoEditTriggers</set></property>
+     <property name="columnCount"><number>8</number></property>
+     <column><property name="text"><string>Nom</string></property></column>
+     <column><property name="text"><string>Téléphone</string></property></column>
+     <column><property name="text"><string>Email</string></property></column>
+     <column><property name="text"><string>Adresse</string></property></column>
+     <column><property name="text"><string>Factures (TND)</string></property></column>
+     <column><property name="text"><string>Payé (TND)</string></property></column>
+     <column><property name="text"><string>Solde dû (TND)</string></property></column>
+     <column><property name="text"><string>Actions</string></property></column>
+    </widget>
+   </item>
+
+  </layout>
+ </widget>
+ <resources/><connections/>
+</ui>

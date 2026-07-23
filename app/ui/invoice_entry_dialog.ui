@@ -1,0 +1,192 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>InvoiceEntryDialog</class>
+ <widget class="QDialog" name="InvoiceEntryDialog">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>900</width><height>580</height></rect></property>
+  <property name="windowTitle"><string>Entrée stock — Nouvelle facture</string></property>
+  <property name="minimumSize"><size><width>900</width><height>580</height></size></property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property>
+   <property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+   <property name="spacing"><number>0</number></property>
+
+   
+   <item>
+    <widget class="QFrame" name="header">
+     <property name="minimumHeight"><number>56</number></property>
+     <property name="maximumHeight"><number>56</number></property>
+     <property name="styleSheet"><string>QFrame { background: #059669; }</string></property>
+     <layout class="QHBoxLayout" name="headerLayout">
+      <property name="leftMargin"><number>24</number></property><property name="topMargin"><number>0</number></property>
+      <property name="rightMargin"><number>24</number></property><property name="bottomMargin"><number>0</number></property>
+      <item>
+       <widget class="QLabel" name="headerTitle">
+        <property name="text"><string>📄  Entrée stock — Nouvelle facture</string></property>
+        <property name="styleSheet"><string>font-size: 16px; font-weight: 700; color: white; background: transparent;</string></property>
+        <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Preferred" /></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QFrame" name="refBar">
+     <property name="styleSheet"><string>QFrame { background: #F9FAFB; border-bottom: 1px solid #E5E7EB; }</string></property>
+     <layout class="QHBoxLayout" name="refLayout">
+      <property name="leftMargin"><number>20</number></property><property name="topMargin"><number>10</number></property>
+      <property name="rightMargin"><number>20</number></property><property name="bottomMargin"><number>10</number></property>
+      <property name="spacing"><number>10</number></property>
+      <item>
+       <widget class="QLabel" name="lblRef">
+        <property name="text"><string>Réf. facture :</string></property>
+        <property name="styleSheet"><string>font-weight: 600; color: #374151;</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="ref">
+        <property name="minimumHeight"><number>38</number></property>
+        <property name="maximumWidth"><number>220</number></property>
+        <property name="placeholderText"><string>N° facture fournisseur…</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lblSupplier">
+        <property name="text"><string>Fournisseur :</string></property>
+        <property name="styleSheet"><string>font-weight: 600; color: #374151;</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="supplierName">
+        <property name="minimumHeight"><number>38</number></property>
+        <property name="maximumWidth"><number>220</number></property>
+        <property name="placeholderText"><string>Nom fournisseur (optionnel)</string></property>
+       </widget>
+      </item>
+      <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QWidget" name="colHeaders">
+     <property name="minimumHeight"><number>30</number></property>
+     <property name="maximumHeight"><number>30</number></property>
+     <property name="styleSheet"><string>QWidget { background: #F3F4F6; }</string></property>
+     <layout class="QHBoxLayout" name="colHeadersLayout">
+      <property name="leftMargin"><number>20</number></property><property name="topMargin"><number>0</number></property>
+      <property name="rightMargin"><number>20</number></property><property name="bottomMargin"><number>0</number></property>
+      <property name="spacing"><number>6</number></property>
+      <item>
+       <widget class="QLabel" name="colProduct">
+        <property name="text"><string>PRODUIT</string></property>
+        <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Preferred" /></property>
+        <property name="styleSheet"><string>font-size: 10px; font-weight: 700; color: #6B7280; letter-spacing: 0.5px; background: transparent;</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="colQty">
+        <property name="text"><string>QTÉ</string></property>
+        <property name="minimumWidth"><number>80</number></property>
+        <property name="maximumWidth"><number>80</number></property>
+        <property name="styleSheet"><string>font-size: 10px; font-weight: 700; color: #6B7280; letter-spacing: 0.5px; background: transparent;</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="colPrice">
+        <property name="text"><string>PRIX U.</string></property>
+        <property name="minimumWidth"><number>110</number></property>
+        <property name="maximumWidth"><number>110</number></property>
+        <property name="styleSheet"><string>font-size: 10px; font-weight: 700; color: #6B7280; letter-spacing: 0.5px; background: transparent;</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="colTotal">
+        <property name="text"><string>TOTAL</string></property>
+        <property name="minimumWidth"><number>110</number></property>
+        <property name="maximumWidth"><number>110</number></property>
+        <property name="styleSheet"><string>font-size: 10px; font-weight: 700; color: #6B7280; letter-spacing: 0.5px; background: transparent;</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="colActions">
+        <property name="text"><string /></property>
+        <property name="minimumWidth"><number>34</number></property>
+        <property name="maximumWidth"><number>34</number></property>
+        <property name="styleSheet"><string>background: transparent;</string></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QScrollArea" name="rowsScroll">
+     <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding" /></property>
+     <property name="widgetResizable"><bool>true</bool></property>
+     <property name="frameShape"><enum>QFrame::NoFrame</enum></property>
+     <widget class="QWidget" name="rowsWidget">
+      <property name="styleSheet"><string>QWidget { background: #FFFFFF; }</string></property>
+      <layout class="QVBoxLayout" name="rowsLayout">
+       <property name="leftMargin"><number>20</number></property><property name="topMargin"><number>8</number></property>
+       <property name="rightMargin"><number>20</number></property><property name="bottomMargin"><number>8</number></property>
+       <property name="spacing"><number>4</number></property>
+       
+      </layout>
+     </widget>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QFrame" name="footerFrame">
+     <property name="styleSheet"><string>QFrame { background: #FFFFFF; border-top: 1.5px solid #E5E7EB; }</string></property>
+     <layout class="QHBoxLayout" name="footerLayout">
+      <property name="leftMargin"><number>20</number></property><property name="topMargin"><number>12</number></property>
+      <property name="rightMargin"><number>20</number></property><property name="bottomMargin"><number>12</number></property>
+      <property name="spacing"><number>12</number></property>
+      <item>
+       <widget class="QPushButton" name="btnAddRow">
+        <property name="text"><string>＋  Ajouter une ligne</string></property>
+        <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+        <property name="minimumHeight"><number>38</number></property>
+       </widget>
+      </item>
+      <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+      <item>
+       <widget class="QLabel" name="lblTotal">
+        <property name="text"><string>Total facture :</string></property>
+        <property name="styleSheet"><string>font-size: 14px; font-weight: 600; color: #374151; background: transparent;</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="totalLbl">
+        <property name="text"><string>0 TND</string></property>
+        <property name="minimumWidth"><number>150</number></property>
+        <property name="styleSheet"><string>font-size: 20px; font-weight: 700; color: #059669; background: transparent;</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnCancel">
+        <property name="text"><string>Annuler</string></property>
+        <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+        <property name="minimumHeight"><number>38</number></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnOk">
+        <property name="text"><string>✅  Confirmer l'entrée stock</string></property>
+        <property name="minimumHeight"><number>38</number></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+  </layout>
+ </widget>
+ <resources /><connections />
+</ui>

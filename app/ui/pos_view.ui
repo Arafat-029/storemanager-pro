@@ -1,0 +1,231 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>POSView</class>
+ <widget class="QWidget" name="POSView">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>1200</width><height>700</height></rect></property>
+  <layout class="QHBoxLayout" name="rootLayout">
+   <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property>
+   <property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+   <property name="spacing"><number>0</number></property>
+
+   
+   <item>
+    <widget class="QWidget" name="catalogPanel">
+     <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding" /></property>
+     <layout class="QVBoxLayout" name="catalogLayout">
+      <property name="leftMargin"><number>16</number></property><property name="topMargin"><number>14</number></property>
+      <property name="rightMargin"><number>12</number></property><property name="bottomMargin"><number>14</number></property>
+      <property name="spacing"><number>10</number></property>
+
+      
+      <item>
+       <layout class="QHBoxLayout" name="searchRow">
+        <property name="spacing"><number>8</number></property>
+        <item>
+         <widget class="QLineEdit" name="searchInput">
+          <property name="placeholderText"><string>🔍  Nom ou code-barres…</string></property>
+          <property name="minimumHeight"><number>44</number></property>
+          <property name="cssClass" stdset="0"><string>searchBar</string></property>
+          <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Fixed" /></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnSearch">
+          <property name="text"><string>Rechercher</string></property>
+          <property name="minimumHeight"><number>44</number></property>
+          <property name="minimumWidth"><number>110</number></property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+
+      
+      <item>
+       <widget class="QScrollArea" name="catScrollArea">
+        <property name="minimumHeight"><number>100</number></property>
+        <property name="maximumHeight"><number>100</number></property>
+        <property name="widgetResizable"><bool>true</bool></property>
+        <property name="horizontalScrollBarPolicy"><enum>Qt::ScrollBarAlwaysOff</enum></property>
+        <property name="verticalScrollBarPolicy"><enum>Qt::ScrollBarAlwaysOff</enum></property>
+        <property name="frameShape"><enum>QFrame::NoFrame</enum></property>
+        <widget class="QWidget" name="catStrip">
+         <layout class="QHBoxLayout" name="catStripLayout">
+          <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>4</number></property>
+          <property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>4</number></property>
+          <property name="spacing"><number>8</number></property>
+          
+         </layout>
+        </widget>
+       </widget>
+      </item>
+
+      
+      <item>
+       <widget class="QLabel" name="countLbl">
+        <property name="text"><string>0 produit(s)</string></property>
+        <property name="styleSheet"><string>font-size: 12px; color: #6B7280;</string></property>
+       </widget>
+      </item>
+
+      
+      <item>
+       <widget class="QScrollArea" name="gridScroll">
+        <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding" /></property>
+        <property name="widgetResizable"><bool>true</bool></property>
+        <property name="frameShape"><enum>QFrame::NoFrame</enum></property>
+        <widget class="QWidget" name="gridWidget">
+         <layout class="QVBoxLayout" name="gridLayout">
+          <property name="spacing"><number>12</number></property>
+          <property name="leftMargin"><number>4</number></property><property name="topMargin"><number>4</number></property>
+          <property name="rightMargin"><number>4</number></property><property name="bottomMargin"><number>4</number></property>
+          
+         </layout>
+        </widget>
+       </widget>
+      </item>
+
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QFrame" name="cartPanel">
+     <property name="objectName"><string>cartPanel</string></property>
+     <property name="minimumWidth"><number>390</number></property>
+     <property name="maximumWidth"><number>390</number></property>
+     <layout class="QVBoxLayout" name="cartOuterLayout">
+      <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property>
+      <property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+      <property name="spacing"><number>0</number></property>
+
+      
+      <item>
+       <widget class="QFrame" name="cartHeader">
+        <property name="objectName"><string>cartHeader</string></property>
+        <layout class="QHBoxLayout" name="cartHeaderLayout">
+         <property name="leftMargin"><number>16</number></property><property name="topMargin"><number>12</number></property>
+         <property name="rightMargin"><number>16</number></property><property name="bottomMargin"><number>12</number></property>
+         <item>
+          <widget class="QLabel" name="cartTitle">
+           <property name="text"><string>🛒  Panier</string></property>
+           <property name="styleSheet"><string>font-size: 16px; font-weight: 700;</string></property>
+           <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Preferred" /></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnClearCart">
+           <property name="text"><string>Vider</string></property>
+           <property name="cssClass" stdset="0"><string>btnDanger</string></property>
+           <property name="minimumHeight"><number>32</number></property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+
+      
+      <item>
+       <widget class="QScrollArea" name="cartScroll">
+        <property name="sizePolicy"><sizepolicy hsizetype="Preferred" vsizetype="Expanding" /></property>
+        <property name="widgetResizable"><bool>true</bool></property>
+        <property name="frameShape"><enum>QFrame::NoFrame</enum></property>
+        <widget class="QWidget" name="cartWidget">
+         <layout class="QVBoxLayout" name="cartItemsLayout">
+          <property name="leftMargin"><number>8</number></property><property name="topMargin"><number>8</number></property>
+          <property name="rightMargin"><number>8</number></property><property name="bottomMargin"><number>8</number></property>
+          <property name="spacing"><number>6</number></property>
+          
+         </layout>
+        </widget>
+       </widget>
+      </item>
+
+      
+      <item>
+       <widget class="QFrame" name="cartTotalPanel">
+        <property name="objectName"><string>cartTotalPanel</string></property>
+        <layout class="QVBoxLayout" name="totalLayout">
+         <property name="spacing"><number>4</number></property>
+         <item>
+          <widget class="QLabel" name="subtotalLbl">
+           <property name="text"><string>Sous-total : 0.000 TND</string></property>
+           <property name="cssClass" stdset="0"><string>cartSubtotalLabel</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="discountLbl">
+           <property name="text"><string /></property>
+           <property name="cssClass" stdset="0"><string>cartSubtotalLabel</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="totalLbl">
+           <property name="text"><string>TOTAL : 0.000 TND</string></property>
+           <property name="cssClass" stdset="0"><string>cartTotalLabel</string></property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+
+      
+      <item>
+       <layout class="QHBoxLayout" name="discRow">
+        <property name="leftMargin"><number>8</number></property><property name="topMargin"><number>0</number></property>
+        <property name="rightMargin"><number>8</number></property><property name="bottomMargin"><number>4</number></property>
+        <item>
+         <widget class="QLabel" name="lblDiscount">
+          <property name="text"><string>Remise :</string></property>
+          <property name="styleSheet"><string>color: #6B7280; font-size: 12px;</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="PriceSpinBox" name="discountSpin">
+          <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Fixed" /></property>
+          <property name="maximum"><double>99999.000000000000000</double></property>
+          <property name="decimals"><number>3</number></property>
+          <property name="maximumHeight"><number>32</number></property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+
+      
+      <item>
+       <layout class="QVBoxLayout" name="payLayout">
+        <property name="leftMargin"><number>8</number></property><property name="topMargin"><number>4</number></property>
+        <property name="rightMargin"><number>8</number></property><property name="bottomMargin"><number>12</number></property>
+        <property name="spacing"><number>8</number></property>
+        <item>
+         <widget class="QPushButton" name="btnCash">
+          <property name="text"><string>💵  Payer en espèces</string></property>
+          <property name="minimumHeight"><number>52</number></property>
+          <property name="styleSheet"><string>font-size: 15px; font-weight: 700; background: #059669; color: white; border-radius: 8px; border: none;</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btnCredit">
+          <property name="text"><string>👤  Crédit client</string></property>
+          <property name="minimumHeight"><number>44</number></property>
+          <property name="styleSheet"><string>font-size: 13px; font-weight: 600; background: #7C3AED; color: white; border-radius: 8px; border: none;</string></property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+
+     </layout>
+    </widget>
+   </item>
+
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>PriceSpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>app/views/widgets/price_input.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources /><connections />
+</ui>

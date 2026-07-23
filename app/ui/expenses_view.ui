@@ -1,0 +1,107 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>ExpensesView</class>
+ <widget class="QWidget" name="ExpensesView">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>900</width><height>600</height></rect></property>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="leftMargin"><number>24</number></property><property name="topMargin"><number>24</number></property>
+   <property name="rightMargin"><number>24</number></property><property name="bottomMargin"><number>24</number></property>
+   <property name="spacing"><number>16</number></property>
+
+   
+   <item>
+    <layout class="QHBoxLayout" name="filterRow">
+     <property name="spacing"><number>8</number></property>
+     <item><widget class="QLabel" name="lblFrom"><property name="text"><string>Du :</string></property></widget></item>
+     <item>
+      <widget class="QDateEdit" name="dateFrom">
+       <property name="minimumHeight"><number>40</number></property>
+       <property name="calendarPopup"><bool>true</bool></property>
+      </widget>
+     </item>
+     <item><widget class="QLabel" name="lblTo"><property name="text"><string>Au :</string></property></widget></item>
+     <item>
+      <widget class="QDateEdit" name="dateTo">
+       <property name="minimumHeight"><number>40</number></property>
+       <property name="calendarPopup"><bool>true</bool></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnFilter">
+       <property name="text"><string>🔍  Filtrer</string></property>
+       <property name="minimumHeight"><number>40</number></property>
+      </widget>
+     </item>
+     <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+     <item>
+      <widget class="QPushButton" name="btnAdd">
+       <property name="text"><string>＋  Nouvelle dépense</string></property>
+       <property name="minimumHeight"><number>40</number></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+
+   
+   <item>
+    <widget class="QFrame" name="totalFrame">
+     <property name="cssClass" stdset="0"><string>statCard</string></property>
+     <property name="minimumHeight"><number>70</number></property>
+     <property name="maximumHeight"><number>70</number></property>
+     <layout class="QHBoxLayout" name="bannerLayout">
+      <item>
+       <widget class="QLabel" name="lblTotalTitle">
+        <property name="text"><string>Total dépenses :</string></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="totalLbl">
+        <property name="text"><string>0.000 TND</string></property>
+        <property name="styleSheet"><string>font-size: 20px; font-weight: 700; color: #E53935;</string></property>
+       </widget>
+      </item>
+      <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+      <item>
+       <widget class="QLabel" name="countLbl">
+        <property name="text"><string>0 dépense(s)</string></property>
+        <property name="styleSheet"><string>color: #6B7280;</string></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QTableWidget" name="table">
+     <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding" /></property>
+     <property name="alternatingRowColors"><bool>true</bool></property>
+     <property name="selectionBehavior"><enum>QAbstractItemView::SelectRows</enum></property>
+     <property name="editTriggers"><set>QAbstractItemView::NoEditTriggers</set></property>
+     <property name="columnCount"><number>6</number></property>
+     <column><property name="text"><string>ID</string></property></column>
+     <column><property name="text"><string>Date</string></property></column>
+     <column><property name="text"><string>Catégorie</string></property></column>
+     <column><property name="text"><string>Montant</string></property></column>
+     <column><property name="text"><string>Description</string></property></column>
+     <column><property name="text"><string>Utilisateur</string></property></column>
+    </widget>
+   </item>
+
+   
+   <item>
+    <layout class="QHBoxLayout" name="actionRow">
+     <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+     <item>
+      <widget class="QPushButton" name="btnDelete">
+       <property name="text"><string>🗑️  Supprimer</string></property>
+       <property name="cssClass" stdset="0"><string>btnDanger</string></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+
+  </layout>
+ </widget>
+ <resources /><connections />
+</ui>

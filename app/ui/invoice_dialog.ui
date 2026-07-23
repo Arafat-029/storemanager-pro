@@ -1,0 +1,83 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>InvoiceDialog</class>
+ <widget class="QDialog" name="InvoiceDialog">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>400</width><height>340</height></rect></property>
+  <property name="windowTitle"><string>Ajouter une facture</string></property>
+  <property name="minimumWidth"><number>400</number></property>
+  <property name="maximumWidth"><number>400</number></property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property>
+   <property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
+   <property name="spacing"><number>0</number></property>
+   <item>
+    <widget class="QLabel" name="dialogTitle">
+     <property name="text"><string>Nouvelle facture fournisseur</string></property>
+     <property name="styleSheet"><string>font-size: 17px; font-weight: 700; padding: 20px 24px 4px;</string></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="supplierSub">
+     <property name="text"><string>Fournisseur : <b>—</b></string></property>
+     <property name="styleSheet"><string>font-size: 13px; color: #6B7280; padding: 0 24px 12px;</string></property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QFormLayout" name="formLayout">
+     <property name="leftMargin"><number>24</number></property><property name="topMargin"><number>8</number></property>
+     <property name="rightMargin"><number>24</number></property><property name="bottomMargin"><number>16</number></property>
+     <property name="spacing"><number>12</number></property>
+     <property name="labelAlignment"><set>Qt::AlignRight|Qt::AlignVCenter</set></property>
+     <item row="0" column="0"><widget class="QLabel" name="lblAmount"><property name="text"><string>Montant (TND) * :</string></property></widget></item>
+     <item row="0" column="1">
+      <widget class="PriceSpinBox" name="amount">
+       <property name="minimumHeight"><number>42</number></property>
+       <property name="maximum"><double>9999999.000000000000000</double></property>
+       <property name="decimals"><number>3</number></property>
+      </widget>
+     </item>
+     <item row="1" column="0"><widget class="QLabel" name="lblRef"><property name="text"><string>Référence :</string></property></widget></item>
+     <item row="1" column="1">
+      <widget class="QLineEdit" name="ref">
+       <property name="minimumHeight"><number>38</number></property>
+       <property name="placeholderText"><string>N° facture (optionnel)</string></property>
+      </widget>
+     </item>
+     <item row="2" column="0"><widget class="QLabel" name="lblNotes"><property name="text"><string>Notes :</string></property></widget></item>
+     <item row="2" column="1">
+      <widget class="QLineEdit" name="notes">
+       <property name="minimumHeight"><number>38</number></property>
+       <property name="placeholderText"><string>Notes (optionnel)</string></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="btnRow">
+     <property name="leftMargin"><number>24</number></property><property name="topMargin"><number>8</number></property>
+     <property name="rightMargin"><number>24</number></property><property name="bottomMargin"><number>20</number></property>
+     <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+     <item>
+      <widget class="QPushButton" name="btnCancel">
+       <property name="text"><string>Annuler</string></property>
+       <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnOk">
+       <property name="text"><string>✅  Enregistrer</string></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>PriceSpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>app/views/widgets/price_input.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources /><connections />
+</ui>

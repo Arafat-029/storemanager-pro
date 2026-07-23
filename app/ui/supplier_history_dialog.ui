@@ -1,0 +1,114 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>SupplierHistoryDialog</class>
+ <widget class="QDialog" name="SupplierHistoryDialog">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>660</width><height>520</height></rect></property>
+  <property name="windowTitle"><string>Historique fournisseur</string></property>
+  <property name="minimumSize"><size><width>660</width><height>520</height></size></property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <property name="leftMargin"><number>24</number></property><property name="topMargin"><number>24</number></property>
+   <property name="rightMargin"><number>24</number></property><property name="bottomMargin"><number>24</number></property>
+   <property name="spacing"><number>16</number></property>
+   <item>
+    <widget class="QLabel" name="dialogTitle">
+     <property name="text"><string>Historique des transactions</string></property>
+     <property name="styleSheet"><string>font-size: 16px; font-weight: 700;</string></property>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QFrame" name="summaryFrame">
+     <property name="styleSheet"><string>QFrame { background: #F0FDF4; border: 1.5px solid #86EFAC; border-radius: 10px; }</string></property>
+     <layout class="QHBoxLayout" name="summaryLayout">
+      <property name="leftMargin"><number>20</number></property><property name="topMargin"><number>14</number></property>
+      <property name="rightMargin"><number>20</number></property><property name="bottomMargin"><number>14</number></property>
+      <property name="spacing"><number>0</number></property>
+      <item>
+       <layout class="QVBoxLayout" name="invoicedCol">
+        <property name="spacing"><number>2</number></property>
+        <item>
+         <widget class="QLabel" name="lblInvoicedTitle">
+          <property name="text"><string>Total factures</string></property>
+          <property name="styleSheet"><string>font-size: 11px; color: #6B7280; font-weight: 600; background: transparent; border: none;</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="lblInvoiced">
+          <property name="text"><string>0.000 TND</string></property>
+          <property name="styleSheet"><string>font-size: 16px; font-weight: 700; color: #D97706; background: transparent; border: none;</string></property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+      <item>
+       <layout class="QVBoxLayout" name="paidCol">
+        <property name="spacing"><number>2</number></property>
+        <item>
+         <widget class="QLabel" name="lblPaidTitle">
+          <property name="text"><string>Total payé</string></property>
+          <property name="styleSheet"><string>font-size: 11px; color: #6B7280; font-weight: 600; background: transparent; border: none;</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="lblPaid">
+          <property name="text"><string>0.000 TND</string></property>
+          <property name="styleSheet"><string>font-size: 16px; font-weight: 700; color: #059669; background: transparent; border: none;</string></property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+      <item>
+       <layout class="QVBoxLayout" name="balanceCol">
+        <property name="spacing"><number>2</number></property>
+        <item>
+         <widget class="QLabel" name="lblBalanceTitle">
+          <property name="text"><string>Solde dû</string></property>
+          <property name="styleSheet"><string>font-size: 11px; color: #6B7280; font-weight: 600; background: transparent; border: none;</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="lblBalance">
+          <property name="text"><string>0.000 TND</string></property>
+          <property name="styleSheet"><string>font-size: 16px; font-weight: 700; color: #DC2626; background: transparent; border: none;</string></property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QTableWidget" name="transactionsTable">
+     <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding" /></property>
+     <property name="alternatingRowColors"><bool>true</bool></property>
+     <property name="selectionBehavior"><enum>QAbstractItemView::SelectRows</enum></property>
+     <property name="editTriggers"><set>QAbstractItemView::NoEditTriggers</set></property>
+     <property name="columnCount"><number>5</number></property>
+     <column><property name="text"><string>Date</string></property></column>
+     <column><property name="text"><string>Type</string></property></column>
+     <column><property name="text"><string>Montant</string></property></column>
+     <column><property name="text"><string>Référence</string></property></column>
+     <column><property name="text"><string>Notes</string></property></column>
+    </widget>
+   </item>
+
+   <item>
+    <layout class="QHBoxLayout" name="btnRow">
+     <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+     <item>
+      <widget class="QPushButton" name="btnClose">
+       <property name="text"><string>Fermer</string></property>
+       <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources /><connections />
+</ui>

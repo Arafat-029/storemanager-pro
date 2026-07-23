@@ -1,0 +1,284 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>ExcelImportDialog</class>
+ <widget class="QWidget" name="ExcelImportDialog">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>1100</width><height>700</height></rect>
+  </property>
+  <property name="minimumSize">
+   <size><width>900</width><height>600</height></size>
+  </property>
+  <property name="windowTitle"><string>Importer un catalogue Excel</string></property>
+
+  <layout class="QVBoxLayout" name="rootLayout">
+   <property name="spacing"><number>0</number></property>
+   <property name="leftMargin"><number>0</number></property>
+   <property name="topMargin"><number>0</number></property>
+   <property name="rightMargin"><number>0</number></property>
+   <property name="bottomMargin"><number>0</number></property>
+
+   
+   <item>
+    <widget class="QFrame" name="headerBar">
+     <property name="objectName"><string>headerBar</string></property>
+     <property name="minimumHeight"><number>68</number></property>
+     <property name="maximumHeight"><number>68</number></property>
+     <property name="styleSheet">
+      <string>QFrame#headerBar { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
+        stop:0 #059669, stop:1 #0369A1); border: none; }</string>
+     </property>
+     <layout class="QHBoxLayout" name="headerLayout">
+      <property name="leftMargin"><number>28</number></property>
+      <property name="rightMargin"><number>28</number></property>
+      <property name="spacing"><number>14</number></property>
+      <item>
+       <widget class="QLabel" name="lblHeaderIcon">
+        <property name="text"><string>📊</string></property>
+        <property name="styleSheet">
+         <string>font-size: 26px; background: transparent; color: white;</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QVBoxLayout" name="headerTextLayout">
+        <property name="spacing"><number>2</number></property>
+        <item>
+         <widget class="QLabel" name="lblHeaderTitle">
+          <property name="text"><string>Importer un catalogue Excel</string></property>
+          <property name="styleSheet">
+           <string>color: white; font-size: 18px; font-weight: 700; background: transparent;</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="lblHeaderSub">
+          <property name="text"><string>Fichiers .xlsx / .xls</string></property>
+          <property name="styleSheet">
+           <string>color: rgba(255,255,255,0.75); font-size: 12px; background: transparent;</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <spacer>
+        <property name="orientation"><enum>Qt::Horizontal</enum></property>
+        <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
+       </spacer>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QFrame" name="fileRow">
+     <property name="objectName"><string>fileRow</string></property>
+     <property name="minimumHeight"><number>62</number></property>
+     <property name="maximumHeight"><number>62</number></property>
+     <property name="styleSheet">
+      <string>QFrame#fileRow { background: #FFFFFF; border: none; border-bottom: 1px solid #E5E7EB; }</string>
+     </property>
+     <layout class="QHBoxLayout" name="fileRowLayout">
+      <property name="leftMargin"><number>24</number></property>
+      <property name="rightMargin"><number>24</number></property>
+      <property name="spacing"><number>12</number></property>
+      <item>
+       <widget class="QLabel" name="lblFileLabel">
+        <property name="text"><string>Fichier :</string></property>
+        <property name="styleSheet">
+         <string>color: #374151; font-weight: 600; font-size: 13px;</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="filePath">
+        <property name="text"><string>Aucun fichier sélectionné</string></property>
+        <property name="styleSheet">
+         <string>color: #9CA3AF; font-size: 13px;</string>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Preferred" />
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnPick">
+        <property name="text"><string>📂  Choisir</string></property>
+        <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+        <property name="fixedHeight"><number>38</number></property>
+        <property name="minimumWidth"><number>120</number></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnParse">
+        <property name="text"><string>🔍  Analyser</string></property>
+        <property name="fixedHeight"><number>38</number></property>
+        <property name="minimumWidth"><number>120</number></property>
+        <property name="enabled"><bool>false</bool></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QProgressBar" name="progressBar">
+     <property name="maximum"><number>0</number></property>
+     <property name="fixedHeight"><number>4</number></property>
+     <property name="styleSheet">
+      <string>QProgressBar { background: #E5E7EB; border: none; }
+QProgressBar::chunk { background: #059669; }</string>
+     </property>
+     <property name="textVisible"><bool>false</bool></property>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QFrame" name="statsBar">
+     <property name="objectName"><string>statsBar</string></property>
+     <property name="minimumHeight"><number>48</number></property>
+     <property name="maximumHeight"><number>48</number></property>
+     <property name="styleSheet">
+      <string>QFrame#statsBar { background: #FFFFFF; border-bottom: 1px solid #E5E7EB; }</string>
+     </property>
+     <layout class="QHBoxLayout" name="statsLayout">
+      <property name="leftMargin"><number>24</number></property>
+      <property name="rightMargin"><number>24</number></property>
+      <property name="spacing"><number>10</number></property>
+      <item>
+       <widget class="QLabel" name="lblHint">
+        <property name="text"><string>Sélectionnez un fichier Excel (.xlsx) pour commencer.</string></property>
+        <property name="styleSheet"><string>color: #6B7280; font-size: 13px;</string></property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Preferred" />
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="chipTotal">
+        <property name="text"><string>📋  0 produit(s)</string></property>
+        <property name="cssClass" stdset="0"><string>statChipTotal</string></property>
+        <property name="styleSheet">
+         <string>background: #EFF6FF; color: #1E40AF; border: 1px solid #BFDBFE;
+border-radius: 8px; padding: 4px 12px; font-size: 12px; font-weight: 600;</string>
+        </property>
+        <property name="visible"><bool>false</bool></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="chipNew">
+        <property name="text"><string>✓  0 nouveau(x)</string></property>
+        <property name="cssClass" stdset="0"><string>statChip</string></property>
+        <property name="styleSheet">
+         <string>background: #F0FDF4; color: #065F46; border: 1px solid #A7F3D0;
+border-radius: 8px; padding: 4px 12px; font-size: 12px; font-weight: 600;</string>
+        </property>
+        <property name="visible"><bool>false</bool></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="chipDup">
+        <property name="text"><string>⚠  0 doublon(s)</string></property>
+        <property name="cssClass" stdset="0"><string>statChipWarn</string></property>
+        <property name="styleSheet">
+         <string>background: #FFFBEB; color: #92400E; border: 1px solid #FDE68A;
+border-radius: 8px; padding: 4px 12px; font-size: 12px; font-weight: 600;</string>
+        </property>
+        <property name="visible"><bool>false</bool></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QTableWidget" name="tableWidget">
+     <property name="alternatingRowColors"><bool>true</bool></property>
+     <property name="selectionBehavior"><enum>QAbstractItemView::SelectRows</enum></property>
+     <property name="showGrid"><bool>true</bool></property>
+     <property name="columnCount"><number>9</number></property>
+     <attribute name="horizontalHeaderStretchLastSection"><bool>false</bool></attribute>
+     <column><property name="text"><string /></property></column>
+     <column><property name="text"><string>Nom du produit</string></property></column>
+     <column><property name="text"><string>Code-barres</string></property></column>
+     <column><property name="text"><string>Fournisseur</string></property></column>
+     <column><property name="text"><string>Catégorie</string></property></column>
+     <column><property name="text"><string>Description</string></property></column>
+     <column><property name="text"><string>Prix vente</string></property></column>
+     <column><property name="text"><string>Prix achat</string></property></column>
+     <column><property name="text"><string>Statut</string></property></column>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QFrame" name="bottomBar">
+     <property name="objectName"><string>bottomBar</string></property>
+     <property name="minimumHeight"><number>62</number></property>
+     <property name="maximumHeight"><number>62</number></property>
+     <property name="styleSheet">
+      <string>QFrame#bottomBar { background: #FFFFFF; border-top: 1px solid #E5E7EB; }</string>
+     </property>
+     <layout class="QHBoxLayout" name="bottomLayout">
+      <property name="leftMargin"><number>20</number></property>
+      <property name="rightMargin"><number>20</number></property>
+      <property name="spacing"><number>8</number></property>
+      <item>
+       <widget class="QPushButton" name="btnAll">
+        <property name="text"><string>✓  Tout</string></property>
+        <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+        <property name="fixedHeight"><number>36</number></property>
+        <property name="minimumWidth"><number>80</number></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnNone">
+        <property name="text"><string>✗  Aucun</string></property>
+        <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+        <property name="fixedHeight"><number>36</number></property>
+        <property name="minimumWidth"><number>80</number></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnSkipDup">
+        <property name="text"><string>⚠  Ignorer doublons</string></property>
+        <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+        <property name="fixedHeight"><number>36</number></property>
+        <property name="minimumWidth"><number>150</number></property>
+       </widget>
+      </item>
+      <item>
+       <spacer>
+        <property name="orientation"><enum>Qt::Horizontal</enum></property>
+        <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnCancel">
+        <property name="text"><string>Fermer</string></property>
+        <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+        <property name="fixedHeight"><number>38</number></property>
+        <property name="minimumWidth"><number>100</number></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnImport">
+        <property name="text"><string>💾  Importer la sélection</string></property>
+        <property name="fixedHeight"><number>38</number></property>
+        <property name="minimumWidth"><number>200</number></property>
+        <property name="enabled"><bool>false</bool></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+  </layout>
+ </widget>
+ <resources />
+ <connections />
+</ui>

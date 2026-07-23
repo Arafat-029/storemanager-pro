@@ -1,0 +1,315 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>ProductDialog</class>
+ <widget class="QWidget" name="ProductDialog">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>640</width><height>720</height></rect>
+  </property>
+  <property name="windowTitle"><string>Produit</string></property>
+  <property name="minimumSize">
+   <size><width>620</width><height>600</height></size>
+  </property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <property name="spacing"><number>0</number></property>
+   <property name="leftMargin"><number>0</number></property>
+   <property name="topMargin"><number>0</number></property>
+   <property name="rightMargin"><number>0</number></property>
+   <property name="bottomMargin"><number>0</number></property>
+
+   
+   <item>
+    <widget class="QFrame" name="titleBar">
+     <property name="styleSheet">
+      <string>QFrame { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,
+        stop:0 #059669, stop:1 #047857); }</string>
+     </property>
+     <property name="minimumHeight"><number>64</number></property>
+     <property name="maximumHeight"><number>64</number></property>
+     <layout class="QHBoxLayout" name="titleLayout">
+      <property name="leftMargin"><number>24</number></property>
+      <property name="rightMargin"><number>24</number></property>
+      <item>
+       <widget class="QLabel" name="lblTitleIcon">
+        <property name="text"><string>🛒</string></property>
+        <property name="styleSheet">
+         <string>font-size: 24px; color: white; background: transparent;</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="lblTitle">
+        <property name="text"><string>Nouveau produit</string></property>
+        <property name="styleSheet">
+         <string>font-size: 17px; font-weight: 700; color: white; background: transparent;</string>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Preferred" />
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QScrollArea" name="scrollArea">
+     <property name="widgetResizable"><bool>true</bool></property>
+     <property name="frameShape"><enum>QFrame::NoFrame</enum></property>
+     <property name="horizontalScrollBarPolicy">
+      <enum>Qt::ScrollBarAlwaysOff</enum>
+     </property>
+     <widget class="QWidget" name="formWidget">
+      <layout class="QFormLayout" name="formLayout">
+       <property name="leftMargin"><number>24</number></property>
+       <property name="topMargin"><number>20</number></property>
+       <property name="rightMargin"><number>24</number></property>
+       <property name="bottomMargin"><number>20</number></property>
+       <property name="spacing"><number>14</number></property>
+       <property name="labelAlignment">
+        <set>Qt::AlignRight|Qt::AlignVCenter</set>
+       </property>
+
+       
+       <item row="0" column="0">
+        <widget class="QLabel" name="lblName">
+         <property name="text"><string>Nom *</string></property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QLineEdit" name="name">
+         <property name="placeholderText"><string>Nom du produit (obligatoire)</string></property>
+         <property name="minimumHeight"><number>42</number></property>
+        </widget>
+       </item>
+
+       
+       <item row="1" column="0">
+        <widget class="QLabel" name="lblBarcode">
+         <property name="text"><string>Code-barres</string></property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QLineEdit" name="barcode">
+         <property name="placeholderText"><string>Laisser vide pour auto-générer</string></property>
+         <property name="minimumHeight"><number>42</number></property>
+        </widget>
+       </item>
+
+       
+       <item row="2" column="0">
+        <widget class="QLabel" name="lblCategory">
+         <property name="text"><string>Catégorie *</string></property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QComboBox" name="category">
+         <property name="minimumHeight"><number>42</number></property>
+        </widget>
+       </item>
+
+       
+       <item row="3" column="0">
+        <widget class="QLabel" name="lblSupplier">
+         <property name="text"><string>Fournisseur</string></property>
+        </widget>
+       </item>
+       <item row="3" column="1">
+        <widget class="QComboBox" name="supplier">
+         <property name="minimumHeight"><number>42</number></property>
+        </widget>
+       </item>
+
+       
+       <item row="4" column="0">
+        <widget class="QLabel" name="lblPurchasePrice">
+         <property name="text"><string>Prix d'achat</string></property>
+        </widget>
+       </item>
+       <item row="4" column="1">
+        <widget class="PriceSpinBox" name="purchasePrice">
+         <property name="minimumHeight"><number>42</number></property>
+         <property name="maximum"><double>99999.990000000009313</double></property>
+         <property name="decimals"><number>3</number></property>
+        </widget>
+       </item>
+
+       
+       <item row="5" column="0">
+        <widget class="QLabel" name="lblSalePrice">
+         <property name="text"><string>Prix de vente *</string></property>
+        </widget>
+       </item>
+       <item row="5" column="1">
+        <widget class="PriceSpinBox" name="salePrice">
+         <property name="minimumHeight"><number>42</number></property>
+         <property name="maximum"><double>99999.990000000009313</double></property>
+         <property name="decimals"><number>3</number></property>
+        </widget>
+       </item>
+
+       
+       <item row="6" column="0">
+        <widget class="QLabel" name="lblStock">
+         <property name="text"><string>Stock initial</string></property>
+        </widget>
+       </item>
+       <item row="6" column="1">
+        <widget class="QDoubleSpinBox" name="stock">
+         <property name="minimumHeight"><number>42</number></property>
+         <property name="maximum"><double>999999.000000000000000</double></property>
+         <property name="decimals"><number>2</number></property>
+        </widget>
+       </item>
+
+       
+       <item row="7" column="0">
+        <widget class="QLabel" name="lblMinStock">
+         <property name="text"><string>Stock minimum</string></property>
+        </widget>
+       </item>
+       <item row="7" column="1">
+        <widget class="QDoubleSpinBox" name="minStock">
+         <property name="minimumHeight"><number>42</number></property>
+         <property name="maximum"><double>9999.000000000000000</double></property>
+         <property name="decimals"><number>2</number></property>
+         <property name="value"><double>5.000000000000000</double></property>
+        </widget>
+       </item>
+
+       
+       <item row="8" column="0">
+        <widget class="QLabel" name="lblUnit">
+         <property name="text"><string>Unité</string></property>
+        </widget>
+       </item>
+       <item row="8" column="1">
+        <widget class="QComboBox" name="unitType">
+         <property name="minimumHeight"><number>42</number></property>
+         <item><property name="text"><string>Pièce</string></property></item>
+         <item><property name="text"><string>Kilogramme</string></property></item>
+         <item><property name="text"><string>Litre</string></property></item>
+        </widget>
+       </item>
+
+       
+       <item row="9" column="0">
+        <widget class="QLabel" name="lblExpiry">
+         <property name="text"><string>Expiration</string></property>
+        </widget>
+       </item>
+       <item row="9" column="1">
+        <widget class="QDateEdit" name="expiry">
+         <property name="minimumHeight"><number>42</number></property>
+         <property name="calendarPopup"><bool>true</bool></property>
+         <property name="specialValueText"><string>Pas de date</string></property>
+         <property name="date"><date><year>2000</year><month>1</month><day>1</day></date></property>
+         <property name="minimumDate">
+          <date><year>2000</year><month>1</month><day>1</day></date>
+         </property>
+        </widget>
+       </item>
+
+       
+       <item row="10" column="0">
+        <widget class="QLabel" name="lblDescription">
+         <property name="text"><string>Description</string></property>
+        </widget>
+       </item>
+       <item row="10" column="1">
+        <widget class="QTextEdit" name="description">
+         <property name="maximumHeight"><number>80</number></property>
+         <property name="placeholderText"><string>Description optionnelle…</string></property>
+        </widget>
+       </item>
+
+       
+       <item row="11" column="0">
+        <widget class="QLabel" name="lblImage">
+         <property name="text"><string>Image</string></property>
+        </widget>
+       </item>
+       <item row="11" column="1">
+        <layout class="QHBoxLayout" name="imgRow">
+         <item>
+          <widget class="QPushButton" name="btnPickImage">
+           <property name="text"><string>📷  Choisir une image</string></property>
+           <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="imgPreview">
+           <property name="fixedWidth"><number>60</number></property>
+           <property name="minimumHeight"><number>60</number></property>
+           <property name="maximumHeight"><number>60</number></property>
+           <property name="styleSheet">
+            <string>border: 1px solid #D1D5DB; border-radius: 8px; background: #F9FAFB;</string>
+           </property>
+           <property name="alignment"><set>Qt::AlignCenter</set></property>
+          </widget>
+         </item>
+         <item>
+          <spacer>
+           <property name="orientation"><enum>Qt::Horizontal</enum></property>
+           <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+
+      </layout>
+     </widget>
+    </widget>
+   </item>
+
+   
+   <item>
+    <widget class="QFrame" name="footer">
+     <property name="styleSheet">
+      <string>QFrame { background: #FFFFFF; border-top: 1px solid #E5E7EB; }</string>
+     </property>
+     <property name="minimumHeight"><number>62</number></property>
+     <property name="maximumHeight"><number>62</number></property>
+     <layout class="QHBoxLayout" name="footerLayout">
+      <property name="leftMargin"><number>24</number></property>
+      <property name="rightMargin"><number>24</number></property>
+      <item>
+       <spacer>
+        <property name="orientation"><enum>Qt::Horizontal</enum></property>
+        <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnCancel">
+        <property name="text"><string>Annuler</string></property>
+        <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+        <property name="minimumWidth"><number>100</number></property>
+        <property name="fixedHeight"><number>38</number></property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnSave">
+        <property name="text"><string>💾  Enregistrer</string></property>
+        <property name="minimumWidth"><number>150</number></property>
+        <property name="fixedHeight"><number>38</number></property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+
+  </layout>
+ </widget>
+
+ 
+ <customwidgets>
+  <customwidget>
+   <class>PriceSpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>app/views/widgets/price_input</header>
+  </customwidget>
+ </customwidgets>
+
+ <resources />
+ <connections />
+</ui>

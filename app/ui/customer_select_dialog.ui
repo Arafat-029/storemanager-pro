@@ -1,0 +1,56 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ui version="4.0">
+ <class>CustomerSelectDialog</class>
+ <widget class="QDialog" name="CustomerSelectDialog">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>460</width><height>420</height></rect></property>
+  <property name="windowTitle"><string>Sélectionner un client</string></property>
+  <property name="minimumSize"><size><width>460</width><height>400</height></size></property>
+  <layout class="QVBoxLayout" name="rootLayout">
+   <property name="leftMargin"><number>20</number></property><property name="topMargin"><number>20</number></property>
+   <property name="rightMargin"><number>20</number></property><property name="bottomMargin"><number>20</number></property>
+   <property name="spacing"><number>12</number></property>
+   <item>
+    <widget class="QLabel" name="titleLbl">
+     <property name="text"><string>👤  Choisir le client</string></property>
+     <property name="styleSheet"><string>font-size: 15px; font-weight: 700;</string></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLineEdit" name="search">
+     <property name="minimumHeight"><number>40</number></property>
+     <property name="placeholderText"><string>Rechercher par nom ou téléphone…</string></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QListWidget" name="customerList">
+     <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Expanding" /></property>
+     <property name="alternatingRowColors"><bool>true</bool></property>
+     <property name="selectionMode"><enum>QAbstractItemView::SingleSelection</enum></property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="btnNewCustomer">
+     <property name="text"><string>＋  Nouveau client</string></property>
+     <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="btnRow">
+     <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
+     <item>
+      <widget class="QPushButton" name="btnCancel">
+       <property name="text"><string>Annuler</string></property>
+       <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnOk">
+       <property name="text"><string>✅  Sélectionner</string></property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources /><connections />
+</ui>
