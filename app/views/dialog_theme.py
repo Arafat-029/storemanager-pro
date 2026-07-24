@@ -5,11 +5,10 @@ from PySide6.QtWidgets import QDialog, QMessageBox
 
 LIGHT_DIALOG_QSS = """
 QDialog {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 #FFFFFF, stop:1 #F8FAFC);
-    color: #111827;
-    border: 1px solid #E5E7EB;
-    border-radius: 16px;
+    background: #FFFFFF;
+    color: #1B2A4A;
+    border: 1px solid #E0E6EF;
+    border-radius: 14px;
 }
 QDialog > QWidget,
 QDialog QWidget,
@@ -22,19 +21,19 @@ QDialog QScrollArea > QWidget > QWidget {
 }
 QLabel, QDialog QLabel {
     background: transparent;
-    color: #6B7280;
+    color: #1B2A4A;
     border: none;
     font-size: 12px;
     font-weight: 600;
 }
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QDateEdit, QListWidget {
-    background: #FFFFFF;
-    color: #111827;
-    border: 1.5px solid #D1D5DB;
+    background: #F8FAFC;
+    color: #1B2A4A;
+    border: 1.5px solid #CBD5E1;
     border-radius: 10px;
     padding: 10px 12px;
     min-height: 40px;
-    selection-background-color: #059669;
+    selection-background-color: #2196F3;
     selection-color: #FFFFFF;
 }
 QComboBox {
@@ -54,8 +53,8 @@ QComboBox::down-arrow {
 }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus,
 QTextEdit:focus, QDateEdit:focus, QListWidget:focus {
-    border-color: #2563EB;
-    background: #F8FAFC;
+    border-color: #2196F3;
+    background: #FFFFFF;
 }
 QLineEdit::placeholder-text, QTextEdit {
     color: #111827;
@@ -82,13 +81,13 @@ QPushButton:disabled {
 }
 QPushButton#btnSecondary, QPushButton[cssClass="btnSecondary"] {
     background: transparent;
-    border: 1.5px solid #D1D5DB;
-    color: #6B7280;
+    border: 1.5px solid #CBD5E1;
+    color: #475569;
 }
 QPushButton#btnSecondary:hover, QPushButton[cssClass="btnSecondary"]:hover {
-    background: #F0FDF4;
-    border-color: #059669;
-    color: #111827;
+    background: #F8FAFC;
+    border-color: #2196F3;
+    color: #1B2A4A;
 }
 QPushButton#btnDanger, QPushButton[cssClass="btnDanger"] {
     background: #E91E63;
@@ -182,11 +181,10 @@ QMessageBox QPushButton:pressed {
 
 DARK_DIALOG_QSS = """
 QDialog {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 #111827, stop:1 #0F172A);
-    color: #E5E7EB;
-    border: 1px solid #334155;
-    border-radius: 16px;
+    background: #0D1525;
+    color: #E2E8F0;
+    border: 1px solid #1A2744;
+    border-radius: 14px;
 }
 QDialog > QWidget,
 QDialog QWidget,
@@ -199,25 +197,25 @@ QDialog QScrollArea > QWidget > QWidget {
 }
 QLabel, QDialog QLabel {
     background: transparent;
-    color: #CBD5E1;
+    color: #E2E8F0;
     border: none;
     font-size: 12px;
     font-weight: 600;
 }
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QDateEdit, QListWidget {
-    background: #0F172A;
+    background: #111B2E;
     color: #F8FAFC;
-    border: 1.5px solid #334155;
+    border: 1.5px solid #1A2744;
     border-radius: 10px;
     padding: 10px 12px;
     min-height: 40px;
-    selection-background-color: #2563EB;
+    selection-background-color: #1E88E5;
     selection-color: #FFFFFF;
 }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus,
 QTextEdit:focus, QDateEdit:focus, QListWidget:focus {
-    border-color: #60A5FA;
-    background: #111B2E;
+    border-color: #1E88E5;
+    background: #152238;
 }
 QPushButton {
     background: #2563EB;
@@ -237,12 +235,12 @@ QPushButton:pressed {
 }
 QPushButton#btnSecondary, QPushButton[cssClass="btnSecondary"] {
     background: transparent;
-    border: 1.5px solid #475569;
+    border: 1.5px solid #334155;
     color: #CBD5E1;
 }
 QPushButton#btnSecondary:hover, QPushButton[cssClass="btnSecondary"]:hover {
     background: #111B2E;
-    border-color: #60A5FA;
+    border-color: #1E88E5;
     color: #F8FAFC;
 }
 QPushButton#btnDanger, QPushButton[cssClass="btnDanger"] {

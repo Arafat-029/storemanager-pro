@@ -803,6 +803,14 @@ class POSView(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         QTimer.singleShot(0, self._ensure_opening_cash_initialized)
+        QTimer.singleShot(0, self._refresh_category_strip_view)
+
+    def _refresh_category_strip_view(self):
+        if not hasattr(self, "_cat_scroll") or not hasattr(self, "_cat_strip"):
+            return
+        self._load_categories()
+        self._show_catalog()
+        self._ensure_catalog_visible()
         self._schedule_catalog_restore()
 
     def _normalize_manual_price_input(self):
@@ -840,17 +848,29 @@ class POSView(QWidget):
                 widget.deleteLater()
 
         self._cat_buttons.clear()
-        self._add_cat_widget("Tous", None, color="#059669", image_path=None, selected=True)
+        current_selection = self._active_cat_id
+        self._add_cat_widget(
+            "Tous",
+            None,
+            color="#059669",
+            image_path=None,
+            selected=current_selection is None,
+        )
         for cat in CategoryController.get_all():
             self._add_cat_widget(
                 cat["name"], cat["id"],
                 color=cat.get("color") or "#059669",
                 image_path=cat.get("image_path"),
+                selected=current_selection is not None and current_selection == cat["id"],
             )
 
         self._cat_strip_lay.addStretch()
         self._cat_strip.adjustSize()
         self._cat_strip.setMinimumWidth(self._cat_strip.sizeHint().width() + 8)
+        self._cat_scroll.setVisible(True)
+        self._cat_strip.setVisible(True)
+        self._cat_scroll.show()
+        self._cat_strip.show()
         self._schedule_catalog_restore()
 
     def _make_cat_icon(self, label: str, color: str, image_path: str | None) -> QIcon:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -28,7 +29,7 @@ from app.views.customers_view import CustomersView
 from app.views.users_view import UsersView
 from app.views.expenses_view import ExpensesView
 from app.views.settings_view import SettingsView
-from app.views.dialog_theme import apply_light_messagebox_theme, light_information, light_warning
+from app.views.dialog_theme import apply_dialog_theme, apply_light_messagebox_theme, light_information, light_warning
 from config import APP_NAME, APP_VERSION, ASSETS_DIR
 
 
@@ -94,7 +95,7 @@ class MainWindow(QMainWindow):
             "background: #DC2626; color: white; border: 1px solid #B91C1C; border-radius: 10px;"
             "selection-background-color: #FCA5A5;"
         )
-        self._btn_logout.clicked.connect(self._logout)
+        self._btn_logout.clicked.connect(self._handle_logout_action)
         header_row.addWidget(self._btn_logout)
 
         topnav_layout.addLayout(header_row)
@@ -246,6 +247,12 @@ class MainWindow(QMainWindow):
             emit_cash = getattr(pos_view, "_update_cash_expected_label", None)
             if callable(emit_cash):
                 emit_cash()
+            reload_categories = getattr(pos_view, "_load_categories", None)
+            if callable(reload_categories):
+                reload_categories()
+            show_catalog = getattr(pos_view, "_show_catalog", None)
+            if callable(show_catalog):
+                show_catalog()
 
         if page_id != "customers":
             self._refresh_page_widget(page_widget)
@@ -380,14 +387,24 @@ class MainWindow(QMainWindow):
         else:
             self.navigate("dashboard")
 
-    def _logout(self):
-        reply = QMessageBox.question(
-            self,
-            "Déconnexion",
-            "Voulez-vous vous déconnecter ?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
+    def _confirm_logout(self) -> bool:
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Question)
+        box.setWindowTitle("Déconnexion")
+        box.setText("Voulez-vous vraiment vous déconnecter de votre session ?")
+        box.setInformativeText("Cette action vous ramènera à l’écran de connexion.")
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        box.setDefaultButton(QMessageBox.No)
+        apply_light_messagebox_theme(box)
+        return box.exec() == QMessageBox.Yes
+
+    def _handle_logout_action(self):
+        if not self._confirm_logout():
+            return
+        self._logout(confirm=False)
+
+    def _logout(self, confirm: bool = True):
+        if confirm and not self._confirm_logout():
             return
 
         AuthController.logout()
@@ -436,23 +453,118 @@ class MainWindow(QMainWindow):
         return self._extract_page_content(page_widget)
 
     def _prompt_cashier_exit_action(self) -> str:
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Question)
-        box.setWindowTitle("Fermeture caisse")
-        box.setText("Choisissez l'action pour la caisse.")
-        btn_pause = box.addButton("Pause", QMessageBox.ActionRole)
-        btn_finish = box.addButton("Terminer travail", QMessageBox.AcceptRole)
-        btn_cancel = box.addButton("Annuler", QMessageBox.RejectRole)
-        box.setDefaultButton(btn_finish)
-        apply_light_messagebox_theme(box)
-        box.exec()
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Clôture de caisse")
+        dialog.setModal(True)
+        dialog.setMinimumWidth(430)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
-        clicked = box.clickedButton()
-        if clicked is btn_pause:
-            return "pause"
-        if clicked is btn_finish:
-            return "finish"
-        return "cancel"
+        app_stylesheet = (QApplication.instance().styleSheet() or "").lower()
+        is_dark_theme = any(token in app_stylesheet for token in ("#0b1121", "#0d1525", "#111b2e", "dark"))
+        apply_dialog_theme(dialog, dark=is_dark_theme)
+
+        dialog.setStyleSheet(
+            dialog.styleSheet()
+            + """
+            QDialog {
+                border-radius: 16px;
+                border: 1px solid #E0E6EF;
+            }
+            QLabel#cashierExitTitle {
+                color: #1B2A4A;
+                font-size: 17px;
+                font-weight: 800;
+                margin-bottom: 4px;
+            }
+            QLabel#cashierExitSubtitle {
+                color: #475569;
+                font-size: 12px;
+                font-weight: 500;
+                margin-bottom: 6px;
+            }
+            QPushButton {
+                min-width: 132px;
+                padding: 9px 16px;
+                border-radius: 10px;
+            }
+            QPushButton#btnSecondary {
+                background: #F8FAFC;
+                border: 1.5px solid #CBD5E1;
+                color: #475569;
+            }
+            QPushButton#btnSecondary:hover {
+                background: #F1F5F9;
+                border-color: #94A3B8;
+                color: #1E293B;
+            }
+            QPushButton#btnPrimary {
+                background: #1E88E5;
+                color: #FFFFFF;
+            }
+            QPushButton#btnPrimary:hover {
+                background: #1565C0;
+            }
+            QPushButton#btnDanger {
+                background: #EF4444;
+                color: #FFFFFF;
+            }
+            QPushButton#btnDanger:hover {
+                background: #DC2626;
+            }
+            """
+        )
+
+        title_lbl = QLabel("Que souhaitez-vous faire ?")
+        title_lbl.setObjectName("cashierExitTitle")
+        subtitle_lbl = QLabel("Vous pouvez continuer le travail, vous déconnecter ou terminer la journée.")
+        subtitle_lbl.setObjectName("cashierExitSubtitle")
+        subtitle_lbl.setWordWrap(True)
+
+        logout_btn = QPushButton("Se déconnecter")
+        logout_btn.setObjectName("btnSecondary")
+        finish_btn = QPushButton("Terminer la journée")
+        finish_btn.setObjectName("btnPrimary")
+        finish_btn.setDefault(True)
+        stay_btn = QPushButton("Annuler")
+        stay_btn.setObjectName("btnDanger")
+
+        action = "cancel"
+
+        def choose_logout() -> None:
+            nonlocal action
+            action = "logout"
+            dialog.accept()
+
+        def choose_finish() -> None:
+            nonlocal action
+            action = "finish"
+            dialog.accept()
+
+        def choose_stay() -> None:
+            nonlocal action
+            action = "cancel"
+            dialog.reject()
+
+        logout_btn.clicked.connect(choose_logout)
+        finish_btn.clicked.connect(choose_finish)
+        stay_btn.clicked.connect(choose_stay)
+
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
+        buttons_layout.addWidget(stay_btn)
+        buttons_layout.addWidget(logout_btn)
+        buttons_layout.addWidget(finish_btn)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(12)
+        layout.addWidget(title_lbl)
+        layout.addWidget(subtitle_lbl)
+        layout.addLayout(buttons_layout)
+
+        dialog.setMinimumHeight(205)
+        dialog.exec()
+        return action
 
     def closeEvent(self, event):
         user = AuthController.current_user() or {}
@@ -468,13 +580,10 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
 
-        if action == "pause":
-            ok, message = pos_view.pause_current_shift()
-            if not ok:
-                light_warning(self, "Pause impossible", message)
-                event.ignore()
-                return
-            return super().closeEvent(event)
+        if action == "logout":
+            self._logout(confirm=False)
+            event.ignore()
+            return
 
         summary = pos_view.finish_current_shift()
         light_information(
