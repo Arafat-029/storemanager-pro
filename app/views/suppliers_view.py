@@ -215,6 +215,7 @@ class SuppliersView(QWidget):
         self._table.setColumnWidth(6, 236)
         self._table.setMinimumHeight(140)
         layout.addWidget(self._table)
+        layout.addStretch()
 
     def refresh(self):
         q = self._search.text().strip().lower()

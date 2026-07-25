@@ -239,20 +239,6 @@ class MainWindow(QMainWindow):
 
         self._pos_topbar_widget.setVisible(page_id == "pos")
         self._pos_cash_lbl.setVisible(page_id == "pos" and not AuthController.is_admin())
-        if page_id == "pos":
-            pos_view = self._extract_page_content(page_widget)
-            emit_summary = getattr(pos_view, "emit_cart_summary", None)
-            if callable(emit_summary):
-                emit_summary()
-            emit_cash = getattr(pos_view, "_update_cash_expected_label", None)
-            if callable(emit_cash):
-                emit_cash()
-            reload_categories = getattr(pos_view, "_load_categories", None)
-            if callable(reload_categories):
-                reload_categories()
-            show_catalog = getattr(pos_view, "_show_catalog", None)
-            if callable(show_catalog):
-                show_catalog()
 
         if page_id != "customers":
             self._refresh_page_widget(page_widget)
@@ -416,17 +402,21 @@ class MainWindow(QMainWindow):
         if login.exec():
             self._pages.clear()
             while self._stack.count():
-                self._stack.removeWidget(self._stack.widget(0))
+                widget = self._stack.widget(0)
+                self._stack.removeWidget(widget)
+                widget.deleteLater()
             self._apply_role()
             self.showMaximized()
         else:
             QApplication.quit()
 
     def _rebuild_nav(self):
-        for btn in list(self._nav_buttons.values()):
-            self._nav_hlayout.removeWidget(btn)
-            btn.setParent(None)
-            btn.deleteLater()
+        while self._nav_hlayout.count():
+            item = self._nav_hlayout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
         self._nav_buttons.clear()
 
         allowed_pages = self._allowed_pages()

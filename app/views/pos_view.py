@@ -800,19 +800,6 @@ class POSView(QWidget):
         self.updateGeometry()
         self._schedule_catalog_restore()
 
-    def showEvent(self, event):
-        super().showEvent(event)
-        QTimer.singleShot(0, self._ensure_opening_cash_initialized)
-        QTimer.singleShot(0, self._refresh_category_strip_view)
-
-    def _refresh_category_strip_view(self):
-        if not hasattr(self, "_cat_scroll") or not hasattr(self, "_cat_strip"):
-            return
-        self._load_categories()
-        self._show_catalog()
-        self._ensure_catalog_visible()
-        self._schedule_catalog_restore()
-
     def _normalize_manual_price_input(self):
         if not hasattr(self, "_manual_price_input"):
             return
@@ -944,6 +931,11 @@ class POSView(QWidget):
         btn.clicked.connect(lambda _, cid=cat_id, b=btn: self._select_category(cid, b))
         insert_index = self._cat_strip_lay.count() - 1 if self._cat_strip_lay.count() > 0 else 0
         self._cat_strip_lay.insertWidget(insert_index, btn)
+        # _cat_strip may already be visible from a previous population (e.g. this is
+        # not the first time the tab is opened): a widget's own show() call does not
+        # cascade to children added afterwards, so newly created buttons must be shown
+        # explicitly or they stay hidden and are excluded from the layout's size.
+        btn.show()
         self._cat_buttons.append((btn, cat_id))
 
     def _select_category(self, cat_id, clicked_btn):

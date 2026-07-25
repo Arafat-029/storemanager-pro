@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QLocale
+from PySide6.QtCore import Qt, QLocale, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -57,6 +57,7 @@ class CustomersView(QWidget):
         super().__init__(parent)
         self._is_refreshing = False
         self._loaded_once = False
+        self._load_scheduled = False
         self._build_ui()
 
     def ensure_loaded(self):
@@ -65,6 +66,15 @@ class CustomersView(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        # The first load is deferred so the tab switch itself paints immediately;
+        # showEvent() fires synchronously inside MainWindow.navigate(), and running
+        # refresh() (query + full table rebuild) right here would block that paint.
+        if not self._loaded_once and not self._is_refreshing and not self._load_scheduled:
+            self._load_scheduled = True
+            QTimer.singleShot(0, self._run_initial_load)
+
+    def _run_initial_load(self):
+        self._load_scheduled = False
         if not self._loaded_once and not self._is_refreshing:
             self.refresh()
 
