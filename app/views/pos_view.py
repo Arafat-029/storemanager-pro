@@ -2,10 +2,10 @@ from __future__ import annotations
 from pathlib import Path
 from datetime import datetime
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton,
     QLineEdit, QFrame, QScrollArea, QMessageBox, QDialog, QComboBox,
     QFormLayout, QDoubleSpinBox, QSizePolicy, QListWidget,
-    QListWidgetItem, QAbstractItemView, QToolButton, QSplitter, QCheckBox,
+    QListWidgetItem, QAbstractItemView, QToolButton, QCheckBox,
     QInputDialog,
 )
 from PySide6.QtCore import Qt, QSize, QLocale, QSignalBlocker, QTimer, QEvent, Signal, QRegularExpression
@@ -24,6 +24,7 @@ from app.views.widgets.quantity_input import QuantitySpinBox
 from app.utils.barcode_scanner import BarcodeScannerDialog, SCANNER_AVAILABLE
 from app.views.dialog_theme import (
     apply_dialog_theme,
+    apply_light_dialog_theme,
     light_critical,
     light_information,
     light_question,
@@ -34,19 +35,22 @@ import re
 import subprocess, sys, time
 
 _CARD_W  = 134
+_CARD_MAX_W = 220  # upper bound a card can stretch to in the responsive grid
 _CARD_H  = 182
 _IMG_H   = 102
 _COLS    = 6
 
-_CAT_W   = 78    # category strip button width
-_CAT_H   = 88    # category strip button height
-_CAT_IMG = 40    # category image size (square)
+_CAT_W   = 86    # category strip button width
+_CAT_H   = 92    # category strip button height
+_CAT_IMG = 42    # category image size (square)
 
-_CART_ROW_HEIGHT = 46
-_CART_ROW_ITEM_EXTRA = 2
-_CART_LIST_SPACING = 3
-_CART_VISIBLE_ROWS = 7
-_CART_SCROLL_MIN_ROWS = 5
+_CART_PANEL_W = 420  # fixed cart sidebar width; the catalog absorbs the rest
+
+_CART_ROW_HEIGHT = 58
+_CART_ROW_ITEM_EXTRA = 0
+_CART_LIST_SPACING = 8
+_CART_VISIBLE_ROWS = 4
+_CART_SCROLL_MIN_ROWS = 4
 
 _CAT_EMOJI: dict[str, str] = {
     "tous":     "🏪",
@@ -92,7 +96,10 @@ def _cart_scroll_min_height() -> int:
 
 
 def _grid_columns_for_width(width: int) -> int:
-    return 6
+    """Number of product-card columns that comfortably fill the given viewport width."""
+    if width <= 0:
+        return 5
+    return 4 if width < 760 else 5
 
 
 def _normalized_text(value: str | None) -> str:
@@ -225,7 +232,6 @@ class ManualAmountLineEdit(QLineEdit):
 
 
 class POSView(QWidget):
-    cart_summary_changed = Signal(str, bool)
     cash_expected_changed = Signal(str, str)
 
     def __init__(self, parent=None):
@@ -268,12 +274,13 @@ class POSView(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        splitter = QSplitter(Qt.Horizontal)
-        self._splitter = splitter
-        splitter.setChildrenCollapsible(False)
-        splitter.setHandleWidth(8)
-        splitter.setStyleSheet("QSplitter::handle { background: #E5E7EB; }")
-        root.addWidget(splitter)
+        # Catalog and cart sit side by side. The cart keeps a fixed width so the
+        # layout — and with it the product grid's column count — stays
+        # deterministic; the catalog absorbs whatever width is left over.
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+        root.addLayout(body)
 
         # ── Left: Catalog ──────────────────────────────────────
         left = QWidget()
@@ -304,17 +311,26 @@ class POSView(QWidget):
 
         # Category filter strip
         self._cat_scroll = QScrollArea()
-        self._cat_scroll.setFixedHeight(_CAT_H + 18)
+        self._cat_scroll.setFixedHeight(_CAT_H + 22)
         self._cat_scroll.setWidgetResizable(False)
         self._cat_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._cat_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._cat_scroll.horizontalScrollBar().setSingleStep(24)
         self._cat_scroll.setFrameShape(QFrame.NoFrame)
+        self._cat_scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._cat_scroll.setStyleSheet(
+            "QScrollArea { background: transparent; }"
+            "QScrollBar:horizontal { height: 8px; background: transparent; margin: 2px 0 0 0; }"
+            "QScrollBar::handle:horizontal { background: #CBD5E1; border-radius: 4px; min-width: 24px; }"
+            "QScrollBar::handle:horizontal:hover { background: #94A3B8; }"
+            "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }"
+            "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }"
+        )
 
         self._cat_strip = QWidget()
         self._cat_strip_lay = QHBoxLayout(self._cat_strip)
-        self._cat_strip_lay.setContentsMargins(0, 2, 8, 4)
-        self._cat_strip_lay.setSpacing(8)
+        self._cat_strip_lay.setContentsMargins(0, 2, 8, 6)
+        self._cat_strip_lay.setSpacing(10)
         self._cat_strip_lay.addStretch()
         self._cat_scroll.setWidget(self._cat_strip)
         left_layout.addWidget(self._cat_scroll)
@@ -329,29 +345,60 @@ class POSView(QWidget):
         self._grid_scroll.setWidgetResizable(True)
         self._grid_scroll.setFrameShape(QFrame.NoFrame)
         self._grid_widget = QWidget()
-        self._grid_layout = QVBoxLayout(self._grid_widget)
-        self._grid_layout.setSpacing(10)
+        self._grid_layout = QGridLayout(self._grid_widget)
+        self._grid_layout.setHorizontalSpacing(10)
+        self._grid_layout.setVerticalSpacing(10)
         self._grid_layout.setContentsMargins(4, 4, 4, 4)
-        self._grid_layout.addStretch()
+        self._grid_layout.setAlignment(Qt.AlignTop)
         self._grid_scroll.setWidget(self._grid_widget)
         left_layout.addWidget(self._grid_scroll, 1)
 
-        splitter.addWidget(left)
+        body.addWidget(left, 1)
 
         # ── Right: Cart ───────────────────────────────────────
         cart_panel = QFrame()
         cart_panel.setObjectName("cartPanel")
-        cart_panel.setMinimumWidth(400)
-        cart_panel.setMaximumWidth(480)
-        cart_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        cart_panel.setFixedWidth(_CART_PANEL_W)
+        cart_panel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         cart_layout = QVBoxLayout(cart_panel)
         cart_layout.setContentsMargins(0, 0, 0, 0)
         cart_layout.setSpacing(0)
 
+        # Header — the cart owns its own title bar: item count plus the
+        # deliberately low-contrast clear action.
+        cart_header = QFrame()
+        cart_header.setObjectName("cartHeader")
+        cart_header.setFixedHeight(46)
+        header_lay = QHBoxLayout(cart_header)
+        header_lay.setContentsMargins(12, 0, 10, 0)
+        header_lay.setSpacing(8)
+
+        cart_title_lbl = QLabel("Panier")
+        cart_title_lbl.setObjectName("cartTitleLabel")
+        header_lay.addWidget(cart_title_lbl)
+
+        self._cart_count_lbl = QLabel()
+        self._cart_count_lbl.setObjectName("cartCountLabel")
+        header_lay.addWidget(self._cart_count_lbl)
+
+        header_lay.addStretch()
+
+        # Heights of the cart controls live in the theme (.qss): its global
+        # QPushButton/QLineEdit rules carry a min-height that overrides any
+        # setFixedHeight() here, so the stylesheet is the single source of truth.
+        self._btn_clear_cart = QPushButton("Vider")
+        self._btn_clear_cart.setObjectName("cartClearBtn")
+        self._btn_clear_cart.setCursor(Qt.PointingHandCursor)
+        self._btn_clear_cart.setToolTip("Vider le panier")
+        self._btn_clear_cart.clicked.connect(self._clear_cart)
+        header_lay.addWidget(self._btn_clear_cart)
+
+        cart_layout.addWidget(cart_header)
+
         self._cart_empty_lbl = QLabel("Aucun produit dans le panier.")
         self._cart_empty_lbl.setAlignment(Qt.AlignCenter)
         self._cart_empty_lbl.setWordWrap(True)
-        self._cart_empty_lbl.setStyleSheet("color: #6B7280; font-size: 10px; padding: 10px;")
+        self._cart_empty_lbl.setStyleSheet("color: #94A3B8; font-size: 12px; font-weight: 600; padding: 28px 12px;")
 
         self._cart_list = QListWidget()
         self._cart_list.setObjectName("cartList")
@@ -369,7 +416,7 @@ class POSView(QWidget):
         self._cart_list.verticalScrollBar().setSingleStep(max(24, _cart_item_height() // 2))
         self._cart_list.setStyleSheet(
             "QListWidget#cartList {"
-            "padding: 0 8px 0 0;"
+            "padding: 0 6px 0 0;"
             "border: none;"
             "background: transparent;"
             "}"
@@ -397,21 +444,17 @@ class POSView(QWidget):
 
         cart_content = QWidget()
         cart_content_lay = QVBoxLayout(cart_content)
-        cart_content_lay.setContentsMargins(8, 2, 10, 0)
-        cart_content_lay.setSpacing(4)
+        cart_content_lay.setContentsMargins(12, 12, 12, 4)
+        cart_content_lay.setSpacing(8)
         cart_content_lay.addWidget(self._cart_empty_lbl)
         cart_content_lay.addWidget(self._cart_list, 1)
 
         bottom_panel = QWidget()
-        bottom_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        bottom_panel.setObjectName("cartBottomPanel")
+        bottom_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         bottom_layout = QVBoxLayout(bottom_panel)
-        bottom_layout.setContentsMargins(8, 6, 10, 10)
-        bottom_layout.setSpacing(8)
-
-        self._subtotal_lbl = QLabel("Sous-total : 0.000 TND")
-        self._subtotal_lbl.hide()
-        self._total_lbl = QLabel("TOTAL : 0.000 TND")
-        self._total_lbl.hide()
+        bottom_layout.setContentsMargins(12, 10, 12, 12)
+        bottom_layout.setSpacing(10)
 
         self._cash_expected_lbl = QLabel()
         self._cash_expected_lbl.setStyleSheet(
@@ -419,61 +462,69 @@ class POSView(QWidget):
             "background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 6px 8px;"
         )
 
+        # Secondary action — free-form amount. Kept low-contrast on purpose so it
+        # never competes with the total or the payment buttons.
         manual_row = QHBoxLayout()
-        manual_row.setSpacing(6)
+        manual_row.setSpacing(8)
 
         self._manual_price_input = ManualAmountLineEdit()
-        self._manual_price_input.setMinimumHeight(24)
-        self._manual_price_input.setMaximumHeight(24)
-        self._manual_price_input.setStyleSheet("font-size: 10px; font-weight: 700; padding: 0 6px;")
+        self._manual_price_input.setObjectName("cartManualInput")
+        self._manual_price_input.setPlaceholderText("Autre montant…")
         self._manual_price_input.returnPressed.connect(self._add_manual_price)
         self._manual_price_input.editingFinished.connect(self._normalize_manual_price_input)
 
         self._btn_add_manual = QPushButton("Ajouter")
-        self._btn_add_manual.setObjectName("btnSecondary")
-        self._btn_add_manual.setFixedHeight(24)
-        self._btn_add_manual.setFixedWidth(72)
-        self._btn_add_manual.setStyleSheet("font-size: 10px; font-weight: 800; padding: 0 6px;")
+        self._btn_add_manual.setObjectName("cartAddManualBtn")
+        self._btn_add_manual.setCursor(Qt.PointingHandCursor)
+        self._btn_add_manual.setFixedWidth(84)
         self._btn_add_manual.clicked.connect(self._add_manual_price)
 
         manual_row.addWidget(self._manual_price_input, 1)
         manual_row.addWidget(self._btn_add_manual)
 
-        btn_cash = QPushButton("💵  Payer en espèces")
-        btn_cash.setMinimumHeight(38)
-        btn_cash.setStyleSheet(
-            "font-size: 11px; font-weight: 800;"
-            "background: #059669; color: white; border-radius: 10px; border: none;"
-        )
+        # The single summary zone for the whole POS. Deliberately minimal: no fill,
+        # just a hairline frame — only the amount carries visual weight.
+        total_panel = QFrame()
+        total_panel.setObjectName("cartTotalPanel")
+        total_lay = QHBoxLayout(total_panel)
+        total_lay.setContentsMargins(14, 10, 14, 10)
+        total_lay.setSpacing(8)
+
+        total_caption = QLabel("Total à payer")
+        total_caption.setObjectName("cartTotalCaption")
+        self._total_lbl = QLabel("0.000 TND")
+        self._total_lbl.setObjectName("cartTotalLabel")
+        self._total_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        total_lay.addWidget(total_caption, 0, Qt.AlignVCenter)
+        total_lay.addStretch()
+        total_lay.addWidget(self._total_lbl, 0, Qt.AlignVCenter)
+
+        # Both payment methods are primary actions: same row, same width, same
+        # height, same radius — only the hue separates them.
+        btn_cash = QPushButton("💵   Payer en espèces")
+        btn_cash.setObjectName("cartPayCashBtn")
+        btn_cash.setCursor(Qt.PointingHandCursor)
         btn_cash.clicked.connect(lambda: self._checkout("cash"))
 
-        btn_credit = QPushButton("👤  Crédit client")
-        btn_credit.setMinimumHeight(38)
-        btn_credit.setStyleSheet(
-            "font-size: 11px; font-weight: 800;"
-            "background: #7C3AED; color: white; border-radius: 10px; border: none;"
-        )
+        btn_credit = QPushButton("👤   Crédit client")
+        btn_credit.setObjectName("cartPayCreditBtn")
+        btn_credit.setCursor(Qt.PointingHandCursor)
         btn_credit.clicked.connect(lambda: self._checkout("credit"))
 
         pay_row = QHBoxLayout()
-        pay_row.setSpacing(6)
+        pay_row.setSpacing(8)
         pay_row.addWidget(btn_cash, 1)
         pay_row.addWidget(btn_credit, 1)
 
         self._cash_expected_lbl.hide()
         bottom_layout.addLayout(manual_row)
-        bottom_layout.addSpacing(8)
+        bottom_layout.addWidget(total_panel)
         bottom_layout.addLayout(pay_row)
-        bottom_panel.setFixedHeight(122)
 
         cart_layout.addWidget(cart_content, 1)
-        cart_layout.addSpacing(2)
         cart_layout.addWidget(bottom_panel, 0)
 
-        splitter.addWidget(cart_panel)
-        splitter.setStretchFactor(0, 4)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([960, 500])
+        body.addWidget(cart_panel, 0)
 
     def refresh(self):
         self._sale_units_cache.clear()
@@ -756,8 +807,8 @@ class POSView(QWidget):
                 widget.update()
         if hasattr(self, "_cat_scroll"):
             self._cat_scroll.setVisible(True)
-            self._cat_scroll.setMinimumHeight(_CAT_H + 18)
-            self._cat_scroll.setMaximumHeight(_CAT_H + 22)
+            self._cat_scroll.setMinimumHeight(_CAT_H + 22)
+            self._cat_scroll.setMaximumHeight(_CAT_H + 26)
         if hasattr(self, "_cat_strip"):
             self._cat_strip.setVisible(True)
             self._cat_strip.adjustSize()
@@ -772,19 +823,14 @@ class POSView(QWidget):
             self._cat_strip.update()
         if hasattr(self, "_cat_scroll"):
             self._cat_scroll.setVisible(True)
-            self._cat_scroll.setMinimumHeight(_CAT_H + 18)
-            self._cat_scroll.setMaximumHeight(_CAT_H + 22)
+            self._cat_scroll.setMinimumHeight(_CAT_H + 22)
+            self._cat_scroll.setMaximumHeight(_CAT_H + 26)
             self._cat_scroll.show()
             self._cat_scroll.viewport().update()
         if hasattr(self, "_grid_scroll"):
             self._grid_scroll.setVisible(True)
             self._grid_scroll.show()
             self._grid_scroll.viewport().update()
-        if hasattr(self, "_splitter"):
-            total_width = max(self.width(), 1200)
-            cart_width = max(430, min(500, total_width // 3))
-            left_width = max(720, total_width - cart_width - 36)
-            self._splitter.setSizes([left_width, cart_width])
 
     def _restore_catalog_after_dialog(self):
         self._ensure_category_strip_ready()
@@ -919,14 +965,15 @@ class POSView(QWidget):
         btn.setCheckable(True)
         btn.setChecked(selected)
         btn.setFixedSize(_CAT_W, _CAT_H)
+        btn.setCursor(Qt.PointingHandCursor)
         btn.setStyleSheet(
             "QToolButton {"
-            "  border: 2px solid transparent; border-radius: 12px;"
-            "  font-size: 10px; font-weight: 700; color: #374151; background: #F3F4F6;"
-            "  padding: 4px 3px;"
+            "  border: 1px solid #E9EDF3; border-radius: 12px;"
+            "  font-size: 10.5px; font-weight: 700; color: #374151; background: #F8FAFC;"
+            "  padding: 6px 4px;"
             "}"
-            f"QToolButton:checked {{ border-color: {color}; background: {color}22; color: {color}; }}"
-            "QToolButton:hover:!checked { background: #E5E7EB; }"
+            f"QToolButton:checked {{ border: 1.5px solid {color}; background: {color}1A; color: {color}; }}"
+            "QToolButton:hover:!checked { border-color: #CBD5E1; background: #F1F5F9; }"
         )
         btn.clicked.connect(lambda _, cid=cat_id, b=btn: self._select_category(cid, b))
         insert_index = self._cat_strip_lay.count() - 1 if self._cat_strip_lay.count() > 0 else 0
@@ -1264,10 +1311,18 @@ class POSView(QWidget):
     def _display_products(self, products: list):
         self._displayed_products = list(products)
 
-        while self._grid_layout.count() > 1:
+        while self._grid_layout.count():
             item = self._grid_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            widget = item.widget()
+            if widget is not None:
+                # takeAt() only detaches the widget from the layout; it stays a
+                # visible child (at its old position) until deleteLater() actually
+                # runs on the next event loop turn, which can briefly show stale
+                # cards behind the new ones. Hide it immediately to avoid that.
+                widget.hide()
+                widget.deleteLater()
+        for col in range(5):  # highest possible column count from _grid_columns_for_width
+            self._grid_layout.setColumnStretch(col, 0)
 
         self._count_lbl.setText(f"{len(products)} produit(s)")
 
@@ -1275,23 +1330,19 @@ class POSView(QWidget):
             lbl = QLabel("Aucun produit trouvé")
             lbl.setStyleSheet("color: #6B7280; padding: 32px;")
             lbl.setAlignment(Qt.AlignCenter)
-            self._grid_layout.insertWidget(0, lbl)
+            self._grid_layout.addWidget(lbl, 0, 0)
             return
 
         viewport_width = self._grid_scroll.viewport().width() if hasattr(self, "_grid_scroll") else 0
         columns = _grid_columns_for_width(viewport_width or ((_CARD_W + 12) * _COLS))
         self._current_grid_columns = columns
 
-        for chunk_start in range(0, min(len(products), 80), columns):
-            chunk = products[chunk_start : chunk_start + columns]
-            row_w = QWidget()
-            row_l = QHBoxLayout(row_w)
-            row_l.setContentsMargins(0, 0, 0, 0)
-            row_l.setSpacing(6)
-            for p in chunk:
-                row_l.addWidget(self._make_product_card(p))
-            row_l.addStretch(1)
-            self._grid_layout.insertWidget(self._grid_layout.count() - 1, row_w)
+        for col in range(columns):
+            self._grid_layout.setColumnStretch(col, 1)
+
+        for index, product in enumerate(products[:80]):
+            row, col = divmod(index, columns)
+            self._grid_layout.addWidget(self._make_product_card(product), row, col)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -1309,7 +1360,10 @@ class POSView(QWidget):
         card = QFrame()
         card.setObjectName("productCard")
         card.setCursor(Qt.PointingHandCursor)
-        card.setFixedSize(_CARD_W, _CARD_H)
+        card.setFixedHeight(_CARD_H)
+        card.setMinimumWidth(120)
+        card.setMaximumWidth(220)
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         layout = QVBoxLayout(card)
         layout.setContentsMargins(0, 0, 0, 8)
@@ -1317,7 +1371,8 @@ class POSView(QWidget):
 
         # ── Image / colour placeholder ──────────────────────
         img_lbl = QLabel()
-        img_lbl.setFixedSize(_CARD_W, _IMG_H)
+        img_lbl.setFixedHeight(_IMG_H)
+        img_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         img_lbl.setAlignment(Qt.AlignCenter)
 
         img_loaded = False
@@ -1329,15 +1384,19 @@ class POSView(QWidget):
             if p.exists():
                 pix = QPixmap(str(p))
                 if not pix.isNull():
+                    # Pre-render at the card's max width; setScaledContents() then
+                    # smoothly downscales this to whatever width the card ends up
+                    # at once the responsive grid distributes the row's space.
                     pix = pix.scaled(
-                        _CARD_W, _IMG_H,
+                        _CARD_MAX_W, _IMG_H,
                         Qt.KeepAspectRatioByExpanding,
                         Qt.SmoothTransformation,
                     )
-                    x = max(0, (pix.width()  - _CARD_W) // 2)
+                    x = max(0, (pix.width()  - _CARD_MAX_W) // 2)
                     y = max(0, (pix.height() - _IMG_H)  // 2)
-                    pix = pix.copy(x, y, _CARD_W, _IMG_H)
+                    pix = pix.copy(x, y, _CARD_MAX_W, _IMG_H)
                     img_lbl.setPixmap(pix)
+                    img_lbl.setScaledContents(True)
                     img_lbl.setStyleSheet(
                         "border-radius: 6px 6px 0 0; background: transparent;"
                     )
@@ -1362,7 +1421,6 @@ class POSView(QWidget):
         name_lbl.setStyleSheet(
             "font-size: 11px; font-weight: 600; color: #111827; padding: 0 6px;"
         )
-        name_lbl.setFixedWidth(_CARD_W)
         name_lbl.setMaximumHeight(34)
         layout.addWidget(name_lbl)
 
@@ -1384,10 +1442,15 @@ class POSView(QWidget):
 
         pack_unit = self._pack_sale_unit_for_product(product)
         if pack_unit:
-            pack_btn = QPushButton("Pack", img_lbl)
+            # Anchored via a layout (not absolute .move()) so it stays pinned to the
+            # top-right corner as the card's width changes with the responsive grid.
+            badge_row = QHBoxLayout(img_lbl)
+            badge_row.setContentsMargins(0, 6, 6, 0)
+            badge_row.addStretch()
+
+            pack_btn = QPushButton("Pack")
             pack_btn.setCursor(Qt.PointingHandCursor)
             pack_btn.setFixedSize(44, 20)
-            pack_btn.move(_CARD_W - 50, 6)
             pack_btn.setToolTip(
                 f"{int(round(float(pack_unit.get('quantity') or 1.0)))} pièce(s) • {format_price(float(pack_unit.get('sale_price') or 0.0))}"
             )
@@ -1397,6 +1460,7 @@ class POSView(QWidget):
                 "QPushButton:hover { background: rgba(5, 150, 105, 0.95); }"
             )
             pack_btn.clicked.connect(lambda _, p=product: self._add_pack_to_cart(p))
+            badge_row.addWidget(pack_btn, 0, Qt.AlignTop)
 
         def on_click(event, p=product):
             self._start_sale_for_product(p)
@@ -1640,62 +1704,57 @@ class POSView(QWidget):
         frame.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         frame.setFixedHeight(_cart_item_height())
 
-        outer = QHBoxLayout(frame)
-        outer.setContentsMargins(10, 4, 10, 4)
+        outer = QVBoxLayout(frame)
+        outer.setContentsMargins(14, 8, 12, 8)
         outer.setSpacing(4)
 
-        info_box = QWidget()
-        info_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        info_lay = QVBoxLayout(info_box)
-        info_lay.setContentsMargins(0, 0, 0, 0)
-        info_lay.setSpacing(0)
+        # ── Top line: product name + line total ──────────────
+        top_row = QHBoxLayout()
+        top_row.setSpacing(6)
 
         name_text = (item["name"] or "").strip()
-        display_name = name_text if len(name_text) <= 24 else name_text[:23] + "…"
+        display_name = name_text if len(name_text) <= 34 else name_text[:33] + "…"
         name_lbl = QLabel(display_name)
+        name_lbl.setObjectName("cartItemName")
         name_lbl.setToolTip(name_text)
         name_lbl.setWordWrap(False)
         name_lbl.setMinimumWidth(0)
-        name_lbl.setStyleSheet("font-weight: 800; font-size: 9px; color: #111827;")
-        info_lay.addWidget(name_lbl)
-
-        details_text = "Ligne libre" if item.get("is_manual") else _cart_details_text(item)
-        details_lbl = QLabel(details_text)
-        details_lbl.setWordWrap(False)
-        details_lbl.setMinimumWidth(0)
-        details_lbl.setStyleSheet("color: #64748B; font-size: 8px;")
-        details_lbl.setToolTip(details_text)
-        info_lay.addWidget(details_lbl)
-
-        outer.addWidget(info_box, 1)
+        top_row.addWidget(name_lbl, 1)
 
         total_lbl = QLabel(format_price(item["unit_price"] * item["quantity"]))
+        total_lbl.setObjectName("cartItemTotal")
         total_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        total_lbl.setFixedWidth(72)
-        total_lbl.setStyleSheet("font-weight: 800; font-size: 9px; color: #059669;")
         total_lbl.setToolTip(total_lbl.text())
-        outer.addWidget(total_lbl)
+        top_row.addWidget(total_lbl, 0)
+        outer.addLayout(top_row)
+
+        # ── Bottom line: quantity controls / details + remove ─
+        bottom_row = QHBoxLayout()
+        bottom_row.setSpacing(6)
+
+        def _make_remove_button() -> QPushButton:
+            btn = QPushButton("×")
+            btn.setObjectName("cartRemoveBtn")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFixedWidth(28)
+            btn.setToolTip("Retirer du panier")
+            btn.clicked.connect(lambda _, i=idx: self._remove_item(i))
+            return btn
 
         if item.get("is_manual"):
-            tag = QLabel("Autre")
-            tag.setAlignment(Qt.AlignCenter)
-            tag.setFixedWidth(72)
-            tag.setStyleSheet(
-                "font-weight: 800; font-size: 9px; color: #1D4ED8;"
-                "background: #DBEAFE; border-radius: 6px; padding: 5px 6px;"
-            )
-            outer.addWidget(tag)
-
-            btn_del = QPushButton("×")
-            btn_del.setFixedSize(28, 28)
-            btn_del.setToolTip("Retirer du panier")
-            btn_del.setStyleSheet(
-                "font-size: 14px; font-weight: 800; padding: 0;"
-                "background: #E91E63; color: white; border: none; border-radius: 6px;"
-            )
-            btn_del.clicked.connect(lambda _, i=idx: self._remove_item(i))
-            outer.addWidget(btn_del)
+            details_lbl = QLabel("Ligne libre")
+            details_lbl.setObjectName("cartItemDetails")
+            bottom_row.addWidget(details_lbl, 1)
+            bottom_row.addWidget(_make_remove_button(), 0)
+            outer.addLayout(bottom_row)
             return frame
+
+        details_text = _cart_details_text(item)
+        details_lbl = QLabel(details_text)
+        details_lbl.setObjectName("cartItemDetails")
+        details_lbl.setWordWrap(False)
+        details_lbl.setToolTip(details_text)
+        bottom_row.addWidget(details_lbl, 1)
 
         if item.get("pricing_mode") == "gram":
             delta_m = -0.1
@@ -1704,41 +1763,28 @@ class POSView(QWidget):
             delta_m = -1 if item["unit_type"] == "piece" else -0.1
             delta_p = 1 if item["unit_type"] == "piece" else 0.1
 
-        btn_m = QPushButton("−")
-        btn_m.setFixedSize(30, 28)
-        btn_m.setStyleSheet(
-            "font-size: 14px; font-weight: 800; padding: 0;"
-            "background: #F8FAFC; color: #334155; border: 1px solid #CBD5E1; border-radius: 6px;"
-        )
-        btn_m.clicked.connect(lambda _, i=idx, d=delta_m: self._change_qty(i, d))
-        outer.addWidget(btn_m)
+        def _make_step_button(text: str, delta: float) -> QPushButton:
+            btn = QPushButton(text)
+            btn.setObjectName("cartQtyBtn")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFixedWidth(28)
+            btn.clicked.connect(lambda _, i=idx, d=delta: self._change_qty(i, d))
+            return btn
+
+        bottom_row.addWidget(_make_step_button("−", delta_m), 0)
 
         qty_text = _cart_quantity_text(item)
         qty_lbl = QLabel(qty_text)
+        qty_lbl.setObjectName("cartItemQty")
         qty_lbl.setAlignment(Qt.AlignCenter)
-        qty_lbl.setFixedWidth(54 if item.get("pricing_mode") == "gram" else (28 if item["unit_type"] == "piece" else 42))
-        qty_lbl.setStyleSheet("font-weight: 800; font-size: 10px; color: #111827;")
+        qty_lbl.setMinimumWidth(36)
         qty_lbl.setToolTip(qty_text)
-        outer.addWidget(qty_lbl)
+        bottom_row.addWidget(qty_lbl, 0)
 
-        btn_p = QPushButton("+")
-        btn_p.setFixedSize(30, 28)
-        btn_p.setStyleSheet(
-            "font-size: 14px; font-weight: 800; padding: 0;"
-            "background: #F8FAFC; color: #334155; border: 1px solid #CBD5E1; border-radius: 6px;"
-        )
-        btn_p.clicked.connect(lambda _, i=idx, d=delta_p: self._change_qty(i, d))
-        outer.addWidget(btn_p)
+        bottom_row.addWidget(_make_step_button("+", delta_p), 0)
+        bottom_row.addWidget(_make_remove_button(), 0)
 
-        btn_del = QPushButton("×")
-        btn_del.setFixedSize(28, 28)
-        btn_del.setToolTip("Retirer du panier")
-        btn_del.setStyleSheet(
-            "font-size: 14px; font-weight: 800; padding: 0;"
-            "background: #E91E63; color: white; border: none; border-radius: 6px;"
-        )
-        btn_del.clicked.connect(lambda _, i=idx: self._remove_item(i))
-        outer.addWidget(btn_del)
+        outer.addLayout(bottom_row)
 
         return frame
 
@@ -1803,20 +1849,13 @@ class POSView(QWidget):
             self._cart.clear()
             self._render_cart()
 
-    def emit_cart_summary(self):
-        subtotal = sum(i["unit_price"] * i["quantity"] for i in self._cart)
-        total = max(0.0, subtotal)
-        self.cart_summary_changed.emit(format_price(total), bool(self._cart))
-
-    def clear_cart_from_header(self):
-        self._clear_cart()
-
     def _update_totals(self):
-        subtotal = sum(i["unit_price"] * i["quantity"] for i in self._cart)
-        total = max(0.0, subtotal)
-        self._subtotal_lbl.setText(f"Sous-total : {format_price(subtotal)}")
-        self._total_lbl.setText(f"TOTAL : {format_price(total)}")
-        self.emit_cart_summary()
+        total = max(0.0, sum(i["unit_price"] * i["quantity"] for i in self._cart))
+        self._total_lbl.setText(format_price(total))
+
+        count = len(self._cart)
+        self._cart_count_lbl.setText(f"{count} article{'s' if count > 1 else ''}" if count else "")
+        self._btn_clear_cart.setEnabled(bool(self._cart))
 
     # ──────────────────────────────── Checkout ─────────────────
 

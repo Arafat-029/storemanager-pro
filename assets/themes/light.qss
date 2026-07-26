@@ -468,7 +468,7 @@ QLineEdit#searchBar:focus { border-color: #2196F3; }
 #productCard {
     background: #FFFFFF;
     border: 1.5px solid #E0E6EF;
-    border-radius: 10px;
+    border-radius: 12px;
 }
 #productCard:hover {
     border-color: #2196F3;
@@ -486,17 +486,36 @@ QLineEdit#searchBar:focus { border-color: #2196F3; }
     background: #FFFFFF;
 }
 
+/* Width is owned by POSView (setFixedWidth) — no min/max here, so the two
+   never disagree. */
 #cartPanel {
     background: #FFFFFF;
     border-left: 1.5px solid #E0E6EF;
-    min-width: 250px;
-    max-width: 340px;
 }
 #cartHeader {
     background: #F5F7FA;
     border-bottom: 1.5px solid #E0E6EF;
 }
 #cartHeader QLabel { background: transparent; border: none; }
+#cartTitleLabel { font-size: 13px; font-weight: 800; color: #0F172A; }
+#cartCountLabel { font-size: 11px; font-weight: 600; color: #94A3B8; }
+
+QPushButton#cartClearBtn {
+    background: #FEF2F2;
+    border: 1px solid #FECACA;
+    border-radius: 7px;
+    color: #DC2626;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 0 10px;
+    min-height: 26px;
+    max-height: 26px;
+}
+QPushButton#cartClearBtn:hover   { background: #FEE2E2; border-color: #FCA5A5; }
+QPushButton#cartClearBtn:pressed { background: #FECACA; }
+QPushButton#cartClearBtn:disabled {
+    background: #F8FAFC; border-color: #E9EDF3; color: #CBD5E1;
+}
 
 #cartList {
     background: transparent;
@@ -510,32 +529,120 @@ QLineEdit#searchBar:focus { border-color: #2196F3; }
 }
 
 #cartRow {
-    background: #F5F7FA;
-    border: 1.5px solid #E0E6EF;
-    border-radius: 8px;
+    background: #F8FAFC;
+    border: 1px solid #E9EDF3;
+    border-radius: 10px;
     padding: 0;
 }
+#cartRow:hover { background: #F1F5F9; border-color: #DCE3EC; }
 #cartRow QLabel { background: transparent; border: none; }
+#cartItemName    { font-size: 13px; font-weight: 700; color: #111827; }
+#cartItemTotal   { font-size: 13px; font-weight: 800; color: #059669; }
+#cartItemDetails { font-size: 11px; font-weight: 600; color: #94A3B8; }
+#cartItemQty     { font-size: 12px; font-weight: 800; color: #111827; }
 
-#cartTotalPanel {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 #1B2A4A, stop:1 #2C5282);
-    border-radius: 12px;
-    margin: 8px 10px;
-    padding: 14px;
-    border: none;
+QPushButton#cartQtyBtn {
+    background: #F1F5F9;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    color: #334155;
+    font-size: 14px;
+    font-weight: 800;
+    padding: 0;
+    min-height: 26px;
+    max-height: 26px;
 }
-#cartTotalPanel QLabel {
-    background: transparent; border: none; padding: 0; color: white;
+QPushButton#cartQtyBtn:hover { background: #E2E8F0; }
+QPushButton#cartRemoveBtn {
+    background: #FEE2E2;
+    border: none;
+    border-radius: 8px;
+    color: #DC2626;
+    font-size: 14px;
+    font-weight: 800;
+    padding: 0;
+    min-height: 28px;
+    max-height: 28px;
+}
+QPushButton#cartRemoveBtn:hover { background: #FECACA; }
+
+#cartBottomPanel {
+    background: #FBFCFE;
+    border-top: 1.5px solid #E0E6EF;
+}
+
+/* Secondary action — muted so it never competes with the total or the CTAs. */
+QLineEdit#cartManualInput {
+    background: #FFFFFF;
+    border: 1px solid #E9EDF3;
+    border-radius: 8px;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+    min-height: 32px;
+    max-height: 32px;
+}
+QLineEdit#cartManualInput:focus { border-color: #2196F3; }
+QPushButton#cartAddManualBtn {
+    background: #F1F5F9;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 0 8px;
+    min-height: 32px;
+    max-height: 32px;
+}
+QPushButton#cartAddManualBtn:hover { background: #E2E8F0; color: #1E293B; }
+
+/* The one summary zone in the POS. */
+#cartTotalPanel {
+    background: #FFFFFF;
+    border: 1px solid #E0E6EF;
+    border-radius: 10px;
+    margin: 0;
+}
+#cartTotalPanel QLabel { background: transparent; border: none; padding: 0; }
+#cartTotalCaption {
+    font-size: 12px; font-weight: 600; color: #6B7280;
+    background: transparent; border: none; padding: 0;
 }
 #cartTotalLabel {
-    font-size: 24px; font-weight: 700; color: white;
+    font-size: 28px; font-weight: 800; color: #1B2A4A;
     background: transparent; border: none; padding: 0;
 }
-#cartSubtotalLabel {
-    font-size: 12px; color: rgba(255, 255, 255, 0.82);
-    background: transparent; border: none; padding: 0;
+
+/* Primary CTA — the most prominent control after the total. */
+QPushButton#cartPayCashBtn {
+    background: #059669;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 800;
+    padding: 0 10px;
+    min-height: 56px;
+    max-height: 56px;
 }
+QPushButton#cartPayCashBtn:hover  { background: #047857; }
+QPushButton#cartPayCashBtn:pressed { background: #036B4A; }
+
+/* Secondary CTA — same footprint, lighter treatment. */
+QPushButton#cartPayCreditBtn {
+    background: #2196F3;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 800;
+    padding: 0 10px;
+    min-height: 56px;
+    max-height: 56px;
+}
+QPushButton#cartPayCreditBtn:hover { background: #1E88E5; }
+QPushButton#cartPayCreditBtn:pressed { background: #1565C0; }
 
 /* ── Badges ───────────────────────────────────────────────────── */
 QLabel#badge {

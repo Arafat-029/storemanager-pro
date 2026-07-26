@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -146,35 +145,6 @@ class MainWindow(QMainWindow):
 
         topbar_layout.addStretch()
 
-        self._pos_topbar_widget = QWidget()
-        self._pos_topbar_widget.setVisible(False)
-        self._pos_topbar_widget.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
-
-        pos_topbar_layout = QHBoxLayout(self._pos_topbar_widget)
-        self._pos_topbar_layout = pos_topbar_layout
-        pos_topbar_layout.setContentsMargins(0, 0, 90, 0)
-        pos_topbar_layout.setSpacing(0)
-
-        self._pos_cart_title_lbl = QLabel("Panier")
-        self._pos_cart_title_lbl.setStyleSheet("font-size: 13px; font-weight: 800; color: #0F172A;")
-
-        self._pos_cart_total_lbl = QLabel("0.000 TND")
-        self._pos_cart_total_lbl.setStyleSheet("font-size: 16px; font-weight: 900; color: #059669;")
-
-        self._pos_clear_btn = QPushButton("Vider")
-        self._pos_clear_btn.setObjectName("btnDanger")
-        self._pos_clear_btn.setFixedSize(82, 30)
-        self._pos_clear_btn.setStyleSheet("font-size: 10px; font-weight: 800; padding: 0 8px;")
-        self._pos_clear_btn.clicked.connect(self._clear_pos_cart)
-
-        pos_topbar_layout.addWidget(self._pos_cart_title_lbl)
-        pos_topbar_layout.addSpacing(18)
-        pos_topbar_layout.addWidget(self._pos_cart_total_lbl)
-        pos_topbar_layout.addSpacing(18)
-        pos_topbar_layout.addWidget(self._pos_clear_btn)
-
-        topbar_layout.addWidget(self._pos_topbar_widget, 0, Qt.AlignRight | Qt.AlignVCenter)
-
         root.addWidget(self._topbar)
 
         self._stack = QStackedWidget()
@@ -237,23 +207,10 @@ class MainWindow(QMainWindow):
         for pid, btn in self._nav_buttons.items():
             btn.setChecked(pid == page_id)
 
-        self._pos_topbar_widget.setVisible(page_id == "pos")
         self._pos_cash_lbl.setVisible(page_id == "pos" and not AuthController.is_admin())
 
         if page_id != "customers":
             self._refresh_page_widget(page_widget)
-
-    def _clear_pos_cart(self):
-        pos_page = self._pages.get("pos")
-        if pos_page is None:
-            return
-        clear_cart = getattr(pos_page, "clear_cart_from_header", None)
-        if callable(clear_cart):
-            clear_cart()
-
-    def _update_pos_topbar(self, total_text: str, has_items: bool):
-        self._pos_cart_total_lbl.setText(total_text)
-        self._pos_clear_btn.setEnabled(has_items)
 
     def _update_pos_cash_label(self, text: str, tooltip: str = ""):
         self._pos_cash_lbl.setText(text)
@@ -264,12 +221,10 @@ class MainWindow(QMainWindow):
             self._topbar.setFixedHeight(42)
             self._topbar.setStyleSheet("QFrame#topBar { background: transparent; border: none; }")
             self._topbar_layout.setContentsMargins(0, 4, 24, 2)
-            self._pos_topbar_layout.setContentsMargins(0, 0, 24, 0)
         else:
             self._topbar.setFixedHeight(50)
             self._topbar.setStyleSheet("")
             self._topbar_layout.setContentsMargins(24, 0, 24, 0)
-            self._pos_topbar_layout.setContentsMargins(0, 0, 90, 0)
 
     def _refresh_page_widget(self, page_widget: QWidget):
         target = self._extract_page_content(page_widget)
@@ -321,7 +276,6 @@ class MainWindow(QMainWindow):
             return self._wrap_page_with_scroll(view)
         if page_id == "pos":
             view = POSView()
-            view.cart_summary_changed.connect(self._update_pos_topbar)
             view.cash_expected_changed.connect(self._update_pos_cash_label)
             return view
         if page_id == "products":
