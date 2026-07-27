@@ -78,6 +78,21 @@ def _vsep() -> QFrame:
     return sep
 
 
+_SUPPLIER_ACTION_BTN_H = 32  # fixed height for each of the 4 action buttons
+# QTableWidget::item { padding: 11px 10px } in the theme also insets the rect
+# a setCellWidget() is placed into (not just painted QTableWidgetItems), so
+# the actions cell actually only ever gets row_height - 22px of real height —
+# without adding it back here the button grid was squeezed into ~22px less
+# space than intended, silently eating the vertical spacing between the two
+# button rows until they nearly touched.
+_SUPPLIER_ITEM_VPADDING = 22
+# Row tall enough for a 2x2 button grid at that height plus generous, even
+# margins on every side (14px) and spacing between buttons (12px) — this
+# exact number is also what _limit_supplier_table_height() sums per row, so
+# the two can never drift apart and silently produce a vertical scrollbar.
+_SUPPLIER_ROW_H = (2 * _SUPPLIER_ACTION_BTN_H) + 12 + (2 * 14) + _SUPPLIER_ITEM_VPADDING
+
+
 def _money_item(value: float, color: str | None = None) -> QTableWidgetItem:
     item = QTableWidgetItem(format_price(value))
     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -197,7 +212,11 @@ class SuppliersView(QWidget):
         self._table.setShowGrid(False)
         self._table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self._table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        # Was ScrollBarAlwaysOn: forced a visible scrollbar even when every
+        # row already fits (the table's own height is capped to exactly fit
+        # its rows in _limit_supplier_table_height), which is why one always
+        # showed up regardless of how many suppliers exist.
+        self._table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._table.verticalHeader().setVisible(False)
         header_view = self._table.horizontalHeader()
         header_view.setStretchLastSection(False)
@@ -212,7 +231,7 @@ class SuppliersView(QWidget):
         self._table.setColumnWidth(3, 120)
         self._table.setColumnWidth(4, 120)
         self._table.setColumnWidth(5, 120)
-        self._table.setColumnWidth(6, 236)
+        self._table.setColumnWidth(6, 230)
         self._table.setMinimumHeight(140)
         layout.addWidget(self._table)
         layout.addStretch()
@@ -281,50 +300,54 @@ class SuppliersView(QWidget):
 
             remaining_color = "#DC2626" if remaining > 0 else "#059669"
             self._table.setItem(row, 5, _money_item(remaining, remaining_color))
-            self._table.setRowHeight(row, 84)
+            self._table.setRowHeight(row, _SUPPLIER_ROW_H)
 
             actions = QWidget()
-            actions.setMinimumHeight(72)
             actions.setStyleSheet("background: transparent;")
             act_lay = QGridLayout(actions)
-            act_lay.setContentsMargins(10, 8, 10, 8)
-            act_lay.setHorizontalSpacing(14)
-            act_lay.setVerticalSpacing(10)
+            act_lay.setContentsMargins(14, 14, 14, 14)
+            act_lay.setHorizontalSpacing(12)
+            act_lay.setVerticalSpacing(12)
+            act_lay.setColumnStretch(0, 1)
+            act_lay.setColumnStretch(1, 1)
 
-            btn_hist = QPushButton("Historique")
-            btn_hist.setFixedSize(100, 28)
-            btn_hist.setStyleSheet(
-                "font-size: 10px; font-weight: 700;"
-                "background: #F59E0B; color: white; border: none; border-radius: 6px; padding: 0 6px;"
-            )
+            def _action_btn(text: str, bg: str, fg: str, border: str = "none") -> QPushButton:
+                btn = QPushButton(text)
+                btn.setCursor(Qt.PointingHandCursor)
+                btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+                btn.setStyleSheet(
+                    "QPushButton {"
+                    f"  font-size: 10px; font-weight: 700; background: {bg}; color: {fg};"
+                    f"  border: {border}; border-radius: 6px; padding: 0 6px;"
+                    # Explicit min/max-height: the app's global QPushButton rule
+                    # also sets a min-height, and without an equally explicit
+                    # override here it wins for whichever buttons don't
+                    # separately match it via their border width, producing
+                    # inconsistent per-button heights (buttons "too close
+                    # together" because the grid was sized for the shortest one).
+                    f"  min-height: {_SUPPLIER_ACTION_BTN_H}px; max-height: {_SUPPLIER_ACTION_BTN_H}px;"
+                    "}"
+                )
+                return btn
+
+            # Original color set, restored: Historique in amber, Payer in
+            # green, Modifier neutral, Suppr. in slate — not the app's usual
+            # secondary/danger palette, but this is what the supplier table
+            # had before and is being kept as-is.
+            btn_hist = _action_btn("Historique", "#F59E0B", "#FFFFFF")
             btn_hist.clicked.connect(
                 lambda _, sid=supplier["id"], sn=supplier["name"]: self._manage_invoices(sid, sn)
             )
 
-            btn_pay = QPushButton("Payer")
-            btn_pay.setFixedSize(100, 28)
-            btn_pay.setStyleSheet(
-                "font-size: 10px; font-weight: 700;"
-                "background: #059669; color: white; border: none; border-radius: 6px; padding: 0 6px;"
-            )
+            btn_pay = _action_btn("Payer", "#059669", "#FFFFFF")
             btn_pay.clicked.connect(
                 lambda _, sid=supplier["id"], sn=supplier["name"]: self._pay_supplier(sid, sn)
             )
 
-            btn_edit = QPushButton("Modifier")
-            btn_edit.setFixedSize(100, 28)
-            btn_edit.setStyleSheet(
-                "font-size: 10px; font-weight: 700;"
-                "background: #E5E7EB; color: #374151; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0 6px;"
-            )
+            btn_edit = _action_btn("Modifier", "#E5E7EB", "#374151", "1px solid #CBD5E1")
             btn_edit.clicked.connect(lambda _, sid=supplier["id"]: self._edit_supplier(sid))
 
-            btn_del = QPushButton("Suppr.")
-            btn_del.setFixedSize(100, 28)
-            btn_del.setStyleSheet(
-                "font-size: 10px; font-weight: 700;"
-                "background: #CBD5E1; color: #1F2937; border: 1px solid #B6C2D1; border-radius: 6px; padding: 0 6px;"
-            )
+            btn_del = _action_btn("Suppr.", "#CBD5E1", "#1F2937", "1px solid #B6C2D1")
             btn_del.clicked.connect(
                 lambda _, sid=supplier["id"], sn=supplier["name"]: self._delete_supplier(sid, sn)
             )
@@ -333,18 +356,19 @@ class SuppliersView(QWidget):
             act_lay.addWidget(btn_pay, 0, 1)
             act_lay.addWidget(btn_edit, 1, 0)
             act_lay.addWidget(btn_del, 1, 1)
-            actions.setMinimumWidth(236)
             self._table.setCellWidget(row, 6, actions)
 
-        self._table.resizeRowsToContents()
         self._limit_supplier_table_height(len(suppliers))
 
     def _limit_supplier_table_height(self, total_rows: int) -> None:
         visible_rows = max(1, min(total_rows, 10))
         header_h = self._table.horizontalHeader().height() or 36
-        row_h = 84
+        # Must match the row height actually applied in refresh() exactly
+        # (_SUPPLIER_ROW_H) — any mismatch between an assumed row height here
+        # and the real one is what produces an unwanted vertical scrollbar
+        # even though every row is technically visible.
         frame_h = 12
-        target_h = header_h + (visible_rows * row_h) + frame_h
+        target_h = header_h + (visible_rows * _SUPPLIER_ROW_H) + frame_h
         self._table.setMinimumHeight(target_h)
         self._table.setMaximumHeight(target_h)
 
@@ -887,7 +911,7 @@ class SupplierInvoicesDialog(QDialog):
         header.setSectionResizeMode(7, QHeaderView.Fixed)
         self._table.setColumnWidth(2, 420)
         self._table.setColumnWidth(6, 220)
-        self._table.setColumnWidth(7, 250)
+        self._table.setColumnWidth(7, 300)
         layout.addWidget(self._table, 1)
 
         btn_row = QHBoxLayout()
@@ -926,36 +950,49 @@ class SupplierInvoicesDialog(QDialog):
             self._table.setItem(row, 5, _money_item(remaining, remaining_color))
             self._table.setItem(row, 6, QTableWidgetItem(invoice.get("notes") or "—"))
 
-            row_height = 74 if not items else min(180, 44 + (min(len(items), 6) * 22))
+            # +8 over the previous baseline: the theme's QTableWidget::item
+            # padding (10px top + 10px bottom) also insets the rect a
+            # setCellWidget() is placed into, not just painted text — without
+            # the extra room the action buttons were squeezed vertically,
+            # which is also what made their horizontal spacing collapse.
+            row_height = 82 if not items else min(188, 52 + (min(len(items), 6) * 22))
             self._table.setRowHeight(row, row_height)
 
             actions = QWidget()
             act_lay = QHBoxLayout(actions)
-            act_lay.setContentsMargins(4, 4, 4, 4)
-            act_lay.setSpacing(6)
+            act_lay.setContentsMargins(10, 8, 10, 8)
+            act_lay.setSpacing(10)
+
+            # min/max-height constrain the *content* box; _WHITE_QSS's base
+            # QPushButton rule adds its own 9px top/bottom padding on top of
+            # that unless explicitly zeroed here too, which is what was
+            # inflating these buttons past the row's available height.
+            action_btn_style = "QPushButton { min-height: 30px; max-height: 30px; padding: 0 10px; }"
 
             btn_pay = QPushButton("💰  Payer")
             btn_pay.setObjectName("btnSuccess")
-            btn_pay.setFixedHeight(32)
+            btn_pay.setCursor(Qt.PointingHandCursor)
+            btn_pay.setStyleSheet(action_btn_style)
             btn_pay.setEnabled(remaining > 0)
             btn_pay.clicked.connect(lambda _, inv=invoice: self._pay_invoice(inv))
 
             btn_edit = QPushButton("✏  Modifier")
             btn_edit.setObjectName("btnSecondary")
-            btn_edit.setFixedHeight(32)
+            btn_edit.setCursor(Qt.PointingHandCursor)
+            btn_edit.setStyleSheet(action_btn_style)
             btn_edit.clicked.connect(lambda _, inv=invoice: self._edit_invoice(inv))
 
             btn_del = QPushButton("🗑")
             btn_del.setObjectName("btnDanger")
-            btn_del.setFixedSize(32, 32)
+            btn_del.setCursor(Qt.PointingHandCursor)
+            btn_del.setFixedWidth(36)
+            btn_del.setStyleSheet(action_btn_style)
             btn_del.setToolTip("Supprimer la facture")
             btn_del.clicked.connect(lambda _, inv=invoice: self._delete_invoice(inv))
 
             act_lay.addWidget(btn_pay)
             act_lay.addWidget(btn_edit)
             act_lay.addWidget(btn_del)
-            act_lay.addStretch()
-            actions.setMinimumWidth(236)
             self._table.setCellWidget(row, 7, actions)
 
         self._table.resizeRowsToContents()

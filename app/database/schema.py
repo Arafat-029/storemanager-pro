@@ -109,12 +109,14 @@ CREATE TABLE IF NOT EXISTS stock_movements (
 );
 
 CREATE TABLE IF NOT EXISTS expenses (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id     INTEGER NOT NULL REFERENCES users(id),
-    category    TEXT    NOT NULL,
-    amount      REAL    NOT NULL,
-    description TEXT,
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id             INTEGER NOT NULL REFERENCES users(id),
+    category            TEXT    NOT NULL,
+    amount              REAL    NOT NULL,
+    description         TEXT,
+    recurrence_interval INTEGER,
+    recurrence_unit     TEXT,
+    created_at          TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS product_returns (
@@ -356,6 +358,8 @@ CREATE TABLE IF NOT EXISTS expenses (
     category VARCHAR(255) NOT NULL,
     amount DOUBLE NOT NULL,
     description TEXT NULL,
+    recurrence_interval INT NULL,
+    recurrence_unit VARCHAR(16) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_expenses_user FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -816,6 +820,23 @@ def _migrate():
 
     if "image_path" not in db.table_columns("categories"):
         _execute(conn, "ALTER TABLE categories ADD COLUMN image_path TEXT NULL")
+        conn.commit()
+
+    expense_columns = db.table_columns("expenses")
+    if "recurrence_interval" not in expense_columns:
+        _execute(conn, "ALTER TABLE expenses ADD COLUMN recurrence_interval INTEGER NULL")
+        conn.commit()
+    if "recurrence_unit" not in expense_columns:
+        _execute(conn, "ALTER TABLE expenses ADD COLUMN recurrence_unit VARCHAR(16) NULL")
+        conn.commit()
+    if "recurrence_months" in expense_columns:
+        # One-off backfill from the short-lived months-only version of this
+        # feature: every value there always meant "every N months".
+        _execute(
+            conn,
+            "UPDATE expenses SET recurrence_interval=recurrence_months, recurrence_unit='month' "
+            "WHERE recurrence_months IS NOT NULL AND recurrence_interval IS NULL",
+        )
         conn.commit()
 
     _execute(

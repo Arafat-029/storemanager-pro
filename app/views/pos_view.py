@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
 )
 from PySide6.QtCore import Qt, QSize, QLocale, QSignalBlocker, QTimer, QEvent, Signal, QRegularExpression
-from PySide6.QtGui import QPixmap, QColor, QPainter, QFont, QIcon, QIntValidator, QDoubleValidator, QRegularExpressionValidator, QValidator
+from PySide6.QtGui import QPixmap, QColor, QPainter, QPainterPath, QFont, QIcon, QIntValidator, QDoubleValidator, QRegularExpressionValidator, QValidator
 
 from app.controllers.product_controller import ProductController
 from app.controllers.category_controller import CategoryController
@@ -34,19 +34,34 @@ from config import PRODUCT_IMAGES_DIR, CATEGORY_IMAGES_DIR
 import re
 import subprocess, sys, time
 
+# ── Touch-first sizing system ─────────────────────────────────
+# Every interactive control is at least _TOUCH_MIN tall so it can be hit
+# reliably on a checkout touchscreen; _GAP is the single spacing rhythm.
+_TOUCH_MIN = 44
+_GAP       = 12
+_PAD       = 16
+
 _CARD_W  = 134
 _CARD_MAX_W = 220  # upper bound a card can stretch to in the responsive grid
 _CARD_H  = 182
 _IMG_H   = 102
 _COLS    = 6
 
-_CAT_W   = 86    # category strip button width
-_CAT_H   = 92    # category strip button height
-_CAT_IMG = 42    # category image size (square)
+_SEARCH_H = 60   # the search field and its button share this exact height
 
-_CART_PANEL_W = 420  # fixed cart sidebar width; the catalog absorbs the rest
+_CAT_W   = 100   # category strip button width
+_CAT_H   = 104   # category strip button height
+_CAT_IMG = 66    # category image size (square) — large enough that a real
+                  # photo reads clearly instead of a blurry postage stamp
+_CAT_STRIP_H = _CAT_H + 16  # strip viewport: buttons + padding + h-scrollbar
+_CAT_SELECTED_COLOR = "#059669"  # single accent for the selected category, regardless
+                                  # of that category's own icon color (matches the app's
+                                  # primary green used for the cart's main CTA)
 
-_CART_ROW_HEIGHT = 58
+_CART_PANEL_W = 480  # fixed cart sidebar width; the catalog absorbs the rest
+_CART_HEADER_H = 52
+
+_CART_ROW_HEIGHT = 84   # two text lines + a full 44px stepper row
 _CART_ROW_ITEM_EXTRA = 0
 _CART_LIST_SPACING = 8
 _CART_VISIBLE_ROWS = 4
@@ -98,8 +113,8 @@ def _cart_scroll_min_height() -> int:
 def _grid_columns_for_width(width: int) -> int:
     """Number of product-card columns that comfortably fill the given viewport width."""
     if width <= 0:
-        return 5
-    return 4 if width < 760 else 5
+        return 6
+    return 5 if width < 650 else 6
 
 
 def _normalized_text(value: str | None) -> str:
@@ -217,6 +232,77 @@ def _format_manual_amount_text(amount: float) -> str:
     return f"{amount:.3f}"
 
 
+class MillimeAmountLineEdit(QLineEdit):
+    """Cash-register style amount entry (Tunisian millime convention).
+
+    Digits build the value from the smallest denomination upward, exactly
+    like a real cash-register keypad: typing "5" gives 0.005, then typing
+    "0","0","0" gives 5.000. No decimal point is ever typed. The field can be
+    pre-filled with a suggested amount (e.g. the exact total); the first
+    digit the user types clears that suggestion and starts a fresh entry
+    instead of appending after it.
+    """
+
+    _MAX_MILLIMES = 999_999_999  # matches the app-wide 999999.999 TND ceiling
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._millimes = 0
+        self._fresh = True
+        self.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.setContextMenuPolicy(Qt.NoContextMenu)  # no pasting arbitrary text
+        self._refresh_text()
+
+    def set_value(self, amount: float) -> None:
+        self._millimes = max(0, min(self._MAX_MILLIMES, int(round(float(amount) * 1000))))
+        self._fresh = True
+        self._refresh_text()
+
+    def value(self) -> float:
+        return self._millimes / 1000.0
+
+    def mark_for_fresh_entry(self) -> None:
+        """Make the next digit typed start a new value instead of appending."""
+        self._fresh = True
+
+    def _refresh_text(self) -> None:
+        # setText() already emits textChanged when the value actually differs,
+        # which is what PaymentDialog listens to for the live change/error update.
+        self.setText(f"{self._millimes / 1000:.3f}")
+
+    def _apply_digit(self, digit: int) -> None:
+        base = 0 if self._fresh else self._millimes
+        self._millimes = min(base * 10 + digit, self._MAX_MILLIMES)
+        self._fresh = False
+        self._refresh_text()
+
+    def keyPressEvent(self, event):
+        text = event.text()
+        if text and text.isdigit():
+            self._apply_digit(int(text))
+            return
+        key = event.key()
+        if key == Qt.Key_Backspace:
+            self._millimes = 0 if self._fresh else self._millimes // 10
+            self._fresh = False
+            self._refresh_text()
+            return
+        if key == Qt.Key_Delete:
+            self._millimes = 0
+            self._fresh = True
+            self._refresh_text()
+            return
+        if key in (
+            Qt.Key_Return, Qt.Key_Enter, Qt.Key_Tab, Qt.Key_Backtab, Qt.Key_Escape,
+            Qt.Key_Left, Qt.Key_Right, Qt.Key_Home, Qt.Key_End,
+        ):
+            super().keyPressEvent(event)
+            return
+        # Block letters, '.', ',', and anything else: the value can only ever
+        # be "digits typed so far ÷ 1000".
+        event.ignore()
+
+
 class ManualAmountLineEdit(QLineEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -287,22 +373,22 @@ class POSView(QWidget):
         self._catalog_panel = left
         left.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(16, 14, 12, 14)
-        left_layout.setSpacing(10)
+        left_layout.setContentsMargins(_PAD, _GAP, _PAD, _GAP)
+        left_layout.setSpacing(_GAP)
 
         # Search bar
         search_row = QHBoxLayout()
-        search_row.setSpacing(8)
+        search_row.setSpacing(_GAP)
         self._search_input = QLineEdit()
         self._search_input.setPlaceholderText("🔍  Nom ou code-barres…")
-        self._search_input.setMinimumHeight(44)
         self._search_input.setObjectName("searchBar")
         self._search_input.returnPressed.connect(self._on_scan)
         self._search_input.textChanged.connect(self._on_search_changed)
 
         btn_search = QPushButton("Rechercher")
-        btn_search.setMinimumHeight(44)
-        btn_search.setMinimumWidth(110)
+        btn_search.setObjectName("posSearchBtn")
+        btn_search.setCursor(Qt.PointingHandCursor)
+        btn_search.setFixedWidth(150)
         btn_search.clicked.connect(self._on_scan)
 
         search_row.addWidget(self._search_input, 1)
@@ -311,7 +397,7 @@ class POSView(QWidget):
 
         # Category filter strip
         self._cat_scroll = QScrollArea()
-        self._cat_scroll.setFixedHeight(_CAT_H + 22)
+        self._cat_scroll.setFixedHeight(_CAT_STRIP_H)
         self._cat_scroll.setWidgetResizable(False)
         self._cat_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._cat_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -346,9 +432,10 @@ class POSView(QWidget):
         self._grid_scroll.setFrameShape(QFrame.NoFrame)
         self._grid_widget = QWidget()
         self._grid_layout = QGridLayout(self._grid_widget)
-        self._grid_layout.setHorizontalSpacing(10)
-        self._grid_layout.setVerticalSpacing(10)
-        self._grid_layout.setContentsMargins(4, 4, 4, 4)
+        self._grid_layout.setHorizontalSpacing(_GAP)
+        self._grid_layout.setVerticalSpacing(_GAP)
+        # Zero margins so cards align flush with the search bar and category strip.
+        self._grid_layout.setContentsMargins(0, 0, 0, 0)
         self._grid_layout.setAlignment(Qt.AlignTop)
         self._grid_scroll.setWidget(self._grid_widget)
         left_layout.addWidget(self._grid_scroll, 1)
@@ -368,10 +455,10 @@ class POSView(QWidget):
         # deliberately low-contrast clear action.
         cart_header = QFrame()
         cart_header.setObjectName("cartHeader")
-        cart_header.setFixedHeight(46)
+        cart_header.setFixedHeight(_CART_HEADER_H)
         header_lay = QHBoxLayout(cart_header)
-        header_lay.setContentsMargins(12, 0, 10, 0)
-        header_lay.setSpacing(8)
+        header_lay.setContentsMargins(_GAP, 0, _GAP, 0)
+        header_lay.setSpacing(10)
 
         cart_title_lbl = QLabel("Panier")
         cart_title_lbl.setObjectName("cartTitleLabel")
@@ -444,7 +531,7 @@ class POSView(QWidget):
 
         cart_content = QWidget()
         cart_content_lay = QVBoxLayout(cart_content)
-        cart_content_lay.setContentsMargins(12, 12, 12, 4)
+        cart_content_lay.setContentsMargins(_GAP, _GAP, _GAP, 8)
         cart_content_lay.setSpacing(8)
         cart_content_lay.addWidget(self._cart_empty_lbl)
         cart_content_lay.addWidget(self._cart_list, 1)
@@ -453,8 +540,8 @@ class POSView(QWidget):
         bottom_panel.setObjectName("cartBottomPanel")
         bottom_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         bottom_layout = QVBoxLayout(bottom_panel)
-        bottom_layout.setContentsMargins(12, 10, 12, 12)
-        bottom_layout.setSpacing(10)
+        bottom_layout.setContentsMargins(_GAP, _GAP, _GAP, _GAP)
+        bottom_layout.setSpacing(_GAP)
 
         self._cash_expected_lbl = QLabel()
         self._cash_expected_lbl.setStyleSheet(
@@ -465,7 +552,7 @@ class POSView(QWidget):
         # Secondary action — free-form amount. Kept low-contrast on purpose so it
         # never competes with the total or the payment buttons.
         manual_row = QHBoxLayout()
-        manual_row.setSpacing(8)
+        manual_row.setSpacing(_GAP)
 
         self._manual_price_input = ManualAmountLineEdit()
         self._manual_price_input.setObjectName("cartManualInput")
@@ -476,7 +563,7 @@ class POSView(QWidget):
         self._btn_add_manual = QPushButton("Ajouter")
         self._btn_add_manual.setObjectName("cartAddManualBtn")
         self._btn_add_manual.setCursor(Qt.PointingHandCursor)
-        self._btn_add_manual.setFixedWidth(84)
+        self._btn_add_manual.setFixedWidth(104)
         self._btn_add_manual.clicked.connect(self._add_manual_price)
 
         manual_row.addWidget(self._manual_price_input, 1)
@@ -487,7 +574,7 @@ class POSView(QWidget):
         total_panel = QFrame()
         total_panel.setObjectName("cartTotalPanel")
         total_lay = QHBoxLayout(total_panel)
-        total_lay.setContentsMargins(14, 10, 14, 10)
+        total_lay.setContentsMargins(_PAD, _GAP, _PAD, _GAP)
         total_lay.setSpacing(8)
 
         total_caption = QLabel("Total à payer")
@@ -512,7 +599,7 @@ class POSView(QWidget):
         btn_credit.clicked.connect(lambda: self._checkout("credit"))
 
         pay_row = QHBoxLayout()
-        pay_row.setSpacing(8)
+        pay_row.setSpacing(_GAP)
         pay_row.addWidget(btn_cash, 1)
         pay_row.addWidget(btn_credit, 1)
 
@@ -807,8 +894,7 @@ class POSView(QWidget):
                 widget.update()
         if hasattr(self, "_cat_scroll"):
             self._cat_scroll.setVisible(True)
-            self._cat_scroll.setMinimumHeight(_CAT_H + 22)
-            self._cat_scroll.setMaximumHeight(_CAT_H + 26)
+            self._cat_scroll.setFixedHeight(_CAT_STRIP_H)
         if hasattr(self, "_cat_strip"):
             self._cat_strip.setVisible(True)
             self._cat_strip.adjustSize()
@@ -823,8 +909,7 @@ class POSView(QWidget):
             self._cat_strip.update()
         if hasattr(self, "_cat_scroll"):
             self._cat_scroll.setVisible(True)
-            self._cat_scroll.setMinimumHeight(_CAT_H + 22)
-            self._cat_scroll.setMaximumHeight(_CAT_H + 26)
+            self._cat_scroll.setFixedHeight(_CAT_STRIP_H)
             self._cat_scroll.show()
             self._cat_scroll.viewport().update()
         if hasattr(self, "_grid_scroll"):
@@ -920,7 +1005,20 @@ class POSView(QWidget):
                     )
                     x = max(0, (pix.width()  - _CAT_IMG) // 2)
                     y = max(0, (pix.height() - _CAT_IMG) // 2)
-                    return QIcon(pix.copy(x, y, _CAT_IMG, _CAT_IMG))
+                    cropped = pix.copy(x, y, _CAT_IMG, _CAT_IMG)
+
+                    # Round the corners to match the colored-placeholder icons
+                    # and the product cards, instead of a harsh square photo.
+                    rounded = QPixmap(_CAT_IMG, _CAT_IMG)
+                    rounded.fill(Qt.transparent)
+                    painter = QPainter(rounded)
+                    painter.setRenderHint(QPainter.Antialiasing)
+                    path = QPainterPath()
+                    path.addRoundedRect(0, 0, _CAT_IMG, _CAT_IMG, 12, 12)
+                    painter.setClipPath(path)
+                    painter.drawPixmap(0, 0, cropped)
+                    painter.end()
+                    return QIcon(rounded)
 
         # Colored background
         pix = QPixmap(_CAT_IMG, _CAT_IMG)
@@ -931,7 +1029,7 @@ class POSView(QWidget):
         bg.setAlpha(50)
         painter.setBrush(bg)
         painter.setPen(QColor(color))
-        painter.drawRoundedRect(0, 0, _CAT_IMG, _CAT_IMG, 10, 10)
+        painter.drawRoundedRect(0, 0, _CAT_IMG, _CAT_IMG, 12, 12)
 
         # Emoji lookup — fall back to colored initial letter
         name_lc = label.lower()
@@ -972,12 +1070,16 @@ class POSView(QWidget):
             "  font-size: 10.5px; font-weight: 700; color: #374151; background: #F8FAFC;"
             "  padding: 6px 4px;"
             "}"
-            f"QToolButton:checked {{ border: 1.5px solid {color}; background: {color}1A; color: {color}; }}"
+            f"QToolButton:checked {{ border: 1.5px solid {_CAT_SELECTED_COLOR}; "
+            f"background: {_CAT_SELECTED_COLOR}1A; color: {_CAT_SELECTED_COLOR}; }}"
             "QToolButton:hover:!checked { border-color: #CBD5E1; background: #F1F5F9; }"
         )
         btn.clicked.connect(lambda _, cid=cat_id, b=btn: self._select_category(cid, b))
-        insert_index = self._cat_strip_lay.count() - 1 if self._cat_strip_lay.count() > 0 else 0
-        self._cat_strip_lay.insertWidget(insert_index, btn)
+        # Plain append: _load_categories() clears the strip (trailing stretch
+        # included) before repopulating and re-adds the stretch at the end, so
+        # buttons must simply accumulate in call order. Inserting at count()-1
+        # here pushed "Tous" to the far right, off the visible strip.
+        self._cat_strip_lay.addWidget(btn)
         # _cat_strip may already be visible from a previous population (e.g. this is
         # not the first time the tab is opened): a widget's own show() call does not
         # cascade to children added afterwards, so newly created buttons must be shown
@@ -1174,12 +1276,16 @@ class POSView(QWidget):
         code = self._normalized_barcode(text)
         return len(code) >= 3
 
-    def _clear_search_input(self):
+    def _clear_search_input(self, *, reset_catalog: bool = True):
         with QSignalBlocker(self._search_input):
             self._search_input.clear()
         self._reset_global_scan_buffer()
         self._global_scan_timer.stop()
-        self._show_catalog()
+        # reset_catalog=False keeps whatever _display_products() call the caller
+        # already made (e.g. showing a just-scanned product) instead of
+        # reverting the grid back to the full/category listing.
+        if reset_catalog:
+            self._show_catalog()
         self._schedule_catalog_restore()
 
     def _add_product_from_barcode(
@@ -1201,6 +1307,12 @@ class POSView(QWidget):
             if show_not_found:
                 light_warning(self, "Produit introuvable", f"Aucun produit trouvé pour le code : {code}")
             return False
+
+        # Show the scanned product in the catalog grid, whether it came from the
+        # search bar or a hardware scanner captured by the global key filter —
+        # previously only pressing Enter in the search bar did this; a physical
+        # scan added the item to the cart without ever appearing on screen.
+        self._display_products([product])
 
         stock_quantity = float(product.get("stock_quantity") or 0.0)
         if stock_quantity <= 0:
@@ -1232,7 +1344,7 @@ class POSView(QWidget):
         else:
             self._start_sale_for_product(product)
 
-        self._clear_search_input()
+        self._clear_search_input(reset_catalog=False)
         self._ensure_catalog_visible()
         return True
 
@@ -1321,7 +1433,7 @@ class POSView(QWidget):
                 # cards behind the new ones. Hide it immediately to avoid that.
                 widget.hide()
                 widget.deleteLater()
-        for col in range(5):  # highest possible column count from _grid_columns_for_width
+        for col in range(6):  # highest possible column count from _grid_columns_for_width
             self._grid_layout.setColumnStretch(col, 0)
 
         self._count_lbl.setText(f"{len(products)} produit(s)")
@@ -1361,7 +1473,7 @@ class POSView(QWidget):
         card.setObjectName("productCard")
         card.setCursor(Qt.PointingHandCursor)
         card.setFixedHeight(_CARD_H)
-        card.setMinimumWidth(120)
+        card.setMinimumWidth(108)
         card.setMaximumWidth(220)
         card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -1705,15 +1817,15 @@ class POSView(QWidget):
         frame.setFixedHeight(_cart_item_height())
 
         outer = QVBoxLayout(frame)
-        outer.setContentsMargins(14, 8, 12, 8)
-        outer.setSpacing(4)
+        outer.setContentsMargins(_PAD, 8, _GAP, 8)
+        outer.setSpacing(6)
 
         # ── Top line: product name + line total ──────────────
         top_row = QHBoxLayout()
-        top_row.setSpacing(6)
+        top_row.setSpacing(10)
 
         name_text = (item["name"] or "").strip()
-        display_name = name_text if len(name_text) <= 34 else name_text[:33] + "…"
+        display_name = name_text if len(name_text) <= 38 else name_text[:37] + "…"
         name_lbl = QLabel(display_name)
         name_lbl.setObjectName("cartItemName")
         name_lbl.setToolTip(name_text)
@@ -1730,13 +1842,13 @@ class POSView(QWidget):
 
         # ── Bottom line: quantity controls / details + remove ─
         bottom_row = QHBoxLayout()
-        bottom_row.setSpacing(6)
+        bottom_row.setSpacing(8)
 
         def _make_remove_button() -> QPushButton:
             btn = QPushButton("×")
             btn.setObjectName("cartRemoveBtn")
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setFixedWidth(28)
+            btn.setFixedWidth(_TOUCH_MIN)
             btn.setToolTip("Retirer du panier")
             btn.clicked.connect(lambda _, i=idx: self._remove_item(i))
             return btn
@@ -1767,7 +1879,7 @@ class POSView(QWidget):
             btn = QPushButton(text)
             btn.setObjectName("cartQtyBtn")
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setFixedWidth(28)
+            btn.setFixedWidth(_TOUCH_MIN)
             btn.clicked.connect(lambda _, i=idx, d=delta: self._change_qty(i, d))
             return btn
 
@@ -1777,7 +1889,7 @@ class POSView(QWidget):
         qty_lbl = QLabel(qty_text)
         qty_lbl.setObjectName("cartItemQty")
         qty_lbl.setAlignment(Qt.AlignCenter)
-        qty_lbl.setMinimumWidth(36)
+        qty_lbl.setMinimumWidth(42)
         qty_lbl.setToolTip(qty_text)
         bottom_row.addWidget(qty_lbl, 0)
 
@@ -2297,20 +2409,16 @@ class PaymentDialog(QDialog):
         )
         body.addWidget(recv_lbl)
 
-        hint_lbl = QLabel("Exemple : 10 = 10 dinars, 10.500 = 10 dinars 500 millimes")
+        hint_lbl = QLabel("Tapez les chiffres : ils remplissent les millimes (5 → 0.005, 5000 → 5.000)")
         hint_lbl.setStyleSheet(
             "font-size: 11px; color: #94A3B8; background: transparent; border: none;"
         )
         body.addWidget(hint_lbl)
 
-        self._paid = QLineEdit()
+        self._paid = MillimeAmountLineEdit()
         self._paid.setMinimumHeight(54)
-        self._paid.setText(f"{total:.3f}")
-        self._paid.setPlaceholderText("0.000")
+        self._paid.set_value(total)
         self._paid.setStyleSheet("font-size: 20px; font-weight: 800;")
-        paid_validator = QDoubleValidator(0.0, 999999.999, 3, self._paid)
-        paid_validator.setNotation(QDoubleValidator.StandardNotation)
-        self._paid.setValidator(paid_validator)
         self._paid.textChanged.connect(self._update_change_from_text)
         body.addWidget(self._paid)
 
@@ -2370,7 +2478,7 @@ class PaymentDialog(QDialog):
         apply_light_dialog_theme(self)
 
     def _current_paid_value(self) -> float:
-        return _parse_payment_amount_text(self._paid.text())
+        return self._paid.value()
 
     def _update_change(self):
         paid_value = round(self._current_paid_value(), 3)
@@ -2394,10 +2502,11 @@ class PaymentDialog(QDialog):
             self._error_lbl.setText(f"Montant insuffisant : il manque {format_price(missing)}")
             self._error_lbl.setVisible(True)
             self._paid.setFocus()
-            self._paid.selectAll()
+            # So the next digit the cashier types starts a corrected entry
+            # instead of appending after the insufficient amount.
+            self._paid.mark_for_fresh_entry()
             return
         self._error_lbl.setVisible(False)
-        self._paid.setText(f"{paid_value:.3f}")
         self._should_print = self._print_chk.isChecked()
         self._paid_value = paid_value
         self.accept()
@@ -2455,6 +2564,7 @@ class CreditCheckoutDialog(QDialog):
         self._paid.setStyleSheet("font-size: 18px; font-weight: 800;")
         validator = QDoubleValidator(0.0, 999999.999, 3, self._paid)
         validator.setNotation(QDoubleValidator.StandardNotation)
+        validator.setLocale(QLocale(QLocale.Language.C))  # accept "." regardless of OS locale
         self._paid.setValidator(validator)
         self._paid.textChanged.connect(self._update_due_from_text)
         layout.addWidget(self._paid)

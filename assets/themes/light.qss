@@ -464,6 +464,16 @@ QLineEdit#searchBar {
 }
 QLineEdit#searchBar:focus { border-color: #2196F3; }
 
+/* Sits in the search row: matches the field's height exactly. */
+QPushButton#posSearchBtn {
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 0 18px;
+    min-height: 60px;
+    max-height: 60px;
+}
+
 /* ── POS Product cards ────────────────────────────────────────── */
 #productCard {
     background: #FFFFFF;
@@ -507,9 +517,9 @@ QPushButton#cartClearBtn {
     color: #DC2626;
     font-size: 11px;
     font-weight: 700;
-    padding: 0 10px;
-    min-height: 26px;
-    max-height: 26px;
+    padding: 0 14px;
+    min-height: 42px;
+    max-height: 42px;
 }
 QPushButton#cartClearBtn:hover   { background: #FEE2E2; border-color: #FCA5A5; }
 QPushButton#cartClearBtn:pressed { background: #FECACA; }
@@ -549,8 +559,8 @@ QPushButton#cartQtyBtn {
     font-size: 14px;
     font-weight: 800;
     padding: 0;
-    min-height: 26px;
-    max-height: 26px;
+    min-height: 42px;
+    max-height: 42px;
 }
 QPushButton#cartQtyBtn:hover { background: #E2E8F0; }
 QPushButton#cartRemoveBtn {
@@ -561,8 +571,8 @@ QPushButton#cartRemoveBtn {
     font-size: 14px;
     font-weight: 800;
     padding: 0;
-    min-height: 28px;
-    max-height: 28px;
+    min-height: 44px;
+    max-height: 44px;
 }
 QPushButton#cartRemoveBtn:hover { background: #FECACA; }
 
@@ -580,8 +590,8 @@ QLineEdit#cartManualInput {
     font-size: 12px;
     font-weight: 600;
     color: #475569;
-    min-height: 32px;
-    max-height: 32px;
+    min-height: 46px;
+    max-height: 46px;
 }
 QLineEdit#cartManualInput:focus { border-color: #2196F3; }
 QPushButton#cartAddManualBtn {
@@ -591,9 +601,9 @@ QPushButton#cartAddManualBtn {
     color: #475569;
     font-size: 11px;
     font-weight: 600;
-    padding: 0 8px;
-    min-height: 32px;
-    max-height: 32px;
+    padding: 0 10px;
+    min-height: 46px;
+    max-height: 46px;
 }
 QPushButton#cartAddManualBtn:hover { background: #E2E8F0; color: #1E293B; }
 

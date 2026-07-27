@@ -505,7 +505,10 @@ class ProductDialog(QDialog):
         self._sale_units: list[dict] = []
 
         self._load_ui()
-        self.resize(760, 640)
+        # Tall enough that the footer's buttons (now ~84px including their own
+        # padding — see product_dialog.ui) sit below a comfortable amount of
+        # visible form content instead of immediately clipping the last field.
+        self.resize(780, 780)
 
         title = "Modifier le produit" if product else "Nouveau produit"
         self.setWindowTitle(title)
@@ -544,18 +547,30 @@ class ProductDialog(QDialog):
 
         # Keep the embedded form surface explicitly light to avoid black areas
         # when the app was previously saved in dark mode.
+        #
+        # IMPORTANT: these must be selector-qualified ("QWidget#name { ... }"),
+        # never a bare declaration list ("background: #FFFFFF;"). A bare
+        # stylesheet on a container silently breaks Qt's style cascade for
+        # every descendant: buttons and inputs inside it stop seeing both the
+        # dialog's own theme (apply_light_dialog_theme) AND the app's global
+        # stylesheet, rendering as colorless/blank instead of themed. This is
+        # exactly what made the barcode field and "Enregistrer" button look
+        # broken/unusable — they still worked, they just were not visible.
+        self._ui.setObjectName("productDialogUiRoot")
         self._ui.setAttribute(Qt.WA_StyledBackground, True)
-        self._ui.setStyleSheet("background: #FFFFFF;")
+        self._ui.setStyleSheet("QWidget#productDialogUiRoot { background: #FFFFFF; }")
         scroll_area = getattr(self._ui, "scrollArea", None)
         form_widget = getattr(self._ui, "formWidget", None)
         if scroll_area is not None:
             scroll_area.setStyleSheet("QScrollArea { background: #FFFFFF; border: none; }")
             viewport = scroll_area.viewport()
+            viewport.setObjectName("productDialogScrollViewport")
             viewport.setAttribute(Qt.WA_StyledBackground, True)
-            viewport.setStyleSheet("background: #FFFFFF;")
+            viewport.setStyleSheet("QWidget#productDialogScrollViewport { background: #FFFFFF; }")
         if form_widget is not None:
+            form_widget.setObjectName("productDialogFormWidget")
             form_widget.setAttribute(Qt.WA_StyledBackground, True)
-            form_widget.setStyleSheet("background: #FFFFFF;")
+            form_widget.setStyleSheet("QWidget#productDialogFormWidget { background: #FFFFFF; }")
 
         # Typed widget references (match objectName in .ui)
         self._name           = self._ui.name
@@ -812,6 +827,21 @@ class ProductDialog(QDialog):
         if len(sale_units) == 1 and not sale_units[0].get("barcode") and self._barcode.text().strip():
             sale_units[0]["barcode"] = None
 
+        typed_barcode = self._barcode.text().strip()
+        if typed_barcode:
+            existing = ProductController.get_by_barcode(typed_barcode)
+            current_id = self._product["id"] if self._product else None
+            if existing and int(existing["id"]) != current_id:
+                QMessageBox.warning(
+                    self,
+                    "Code-barres déjà utilisé",
+                    f"Ce code-barres est déjà attribué au produit « {existing.get('name', '')} ».\n"
+                    "Utilisez un code différent ou laissez le champ vide pour en générer un automatiquement.",
+                )
+                self._barcode.setFocus()
+                self._barcode.selectAll()
+                return
+
         data = {
             "name":           name,
             "barcode":        self._barcode.text().strip() or None,
@@ -838,7 +868,13 @@ class ProductDialog(QDialog):
                     db.execute("UPDATE products SET barcode=? WHERE id=?", (bc, pid))
             self.accept()
         except Exception as e:
-            QMessageBox.critical(self, "Erreur", str(e))
+            message = str(e)
+            if "UNIQUE constraint failed" in message and "barcode" in message:
+                message = (
+                    "Ce code-barres est déjà utilisé par un autre produit "
+                    "(éventuellement pour une de ses unités de vente : Pièce, Pack...)."
+                )
+            QMessageBox.critical(self, "Erreur", message)
 
 
 class SaleUnitsDialog(QDialog):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QDialog,
-    QFormLayout, QComboBox, QLineEdit, QLabel,
+    QFormLayout, QComboBox, QLineEdit, QLabel, QSpinBox,
     QMessageBox, QDateEdit, QFrame,
 )
 from app.views.widgets.price_input import PriceSpinBox
@@ -12,6 +12,48 @@ from app.views.widgets.data_table import DataTable
 from app.controllers.expense_controller import ExpenseController, EXPENSE_CATEGORIES
 from app.controllers.auth_controller import AuthController
 from app.utils.helpers import format_price, format_datetime
+
+# Sentinel stored as the combo item's data when "Personnalisé..." is chosen;
+# never persisted as-is — _save() replaces it with the custom row's own values.
+_CUSTOM_RECURRENCE = "custom"
+
+# label -> (interval, unit); unit is one of ExpenseController.RECURRENCE_UNITS.
+RECURRENCE_OPTIONS = [
+    ("Aucune (ponctuelle)", None, None),
+    ("Chaque jour", 1, "day"),
+    ("Chaque semaine", 1, "week"),
+    ("Chaque mois", 1, "month"),
+    ("Chaque 2 mois", 2, "month"),
+    ("Chaque 3 mois", 3, "month"),
+    ("Chaque 6 mois", 6, "month"),
+    ("Chaque année", 1, "year"),
+    ("Personnalisé...", _CUSTOM_RECURRENCE, _CUSTOM_RECURRENCE),
+]
+
+# (singular, plural) French label for each unit.
+_UNIT_LABELS = {
+    "day": ("jour", "jours"),
+    "week": ("semaine", "semaines"),
+    "month": ("mois", "mois"),
+    "year": ("année", "ans"),
+}
+
+# Items offered in the custom-recurrence unit combo box.
+CUSTOM_RECURRENCE_UNITS = [
+    ("Jour(s)", "day"),
+    ("Semaine(s)", "week"),
+    ("Mois", "month"),
+    ("Année(s)", "year"),
+]
+
+
+def _format_recurrence(interval: int | None, unit: str | None) -> str:
+    if not interval or not unit:
+        return "—"
+    singular, plural = _UNIT_LABELS.get(unit, (unit, unit))
+    if interval == 1:
+        return f"Chaque {singular}"
+    return f"Chaque {interval} {plural}"
 
 
 class ExpensesView(QWidget):
@@ -67,7 +109,9 @@ class ExpensesView(QWidget):
         banner_row.addWidget(self._count_lbl)
         layout.addWidget(self._total_frame)
 
-        self._table = DataTable(["ID", "Date", "Catégorie", "Montant", "Description", "Utilisateur"])
+        self._table = DataTable(
+            ["ID", "Date", "Catégorie", "Montant", "Récurrence", "Description", "Utilisateur"]
+        )
         layout.addWidget(self._table, 1)
 
         if AuthController.is_admin():
@@ -93,8 +137,12 @@ class ExpensesView(QWidget):
             d = dict(e)
             d["created_at"] = format_datetime(e["created_at"])
             d["amount"] = format_price(e["amount"])
+            d["recurrence"] = _format_recurrence(e.get("recurrence_interval"), e.get("recurrence_unit"))
             display.append(d)
-        self._table.set_data(display, ["id", "created_at", "category", "amount", "description", "user_name"])
+        self._table.set_data(
+            display,
+            ["id", "created_at", "category", "amount", "recurrence", "description", "user_name"],
+        )
 
     def _add(self):
         dlg = ExpenseDialog(self)
@@ -136,12 +184,42 @@ class ExpenseDialog(QDialog):
         self._amount.setMaximum(999999)
         self._amount.setSuffix("  TND")
 
+        self._recurrence = QComboBox()
+        self._recurrence.setMinimumHeight(42)
+        for label, interval, unit in RECURRENCE_OPTIONS:
+            self._recurrence.addItem(label, (interval, unit))
+        self._recurrence.currentIndexChanged.connect(self._sync_custom_recurrence_visibility)
+
+        # Only shown once "Personnalisé..." is picked, so the common case
+        # (a preset or "Aucune") stays a single, uncluttered row.
+        self._recurrence_custom_value = QSpinBox()
+        self._recurrence_custom_value.setMinimumHeight(42)
+        self._recurrence_custom_value.setRange(1, 365)
+        self._recurrence_custom_value.setValue(1)
+
+        self._recurrence_custom_unit = QComboBox()
+        self._recurrence_custom_unit.setMinimumHeight(42)
+        for label, unit in CUSTOM_RECURRENCE_UNITS:
+            self._recurrence_custom_unit.addItem(label, unit)
+        self._recurrence_custom_unit.setCurrentIndex(2)  # "Mois" as the default unit
+
+        custom_row = QHBoxLayout()
+        custom_row.setSpacing(8)
+        custom_row.addWidget(self._recurrence_custom_value, 1)
+        custom_row.addWidget(self._recurrence_custom_unit, 1)
+        self._recurrence_custom_row_label = QLabel("Tous les :")
+        self._recurrence_custom_row_label.setVisible(False)
+        self._recurrence_custom_value.setVisible(False)
+        self._recurrence_custom_unit.setVisible(False)
+
         self._desc = QLineEdit()
         self._desc.setMinimumHeight(42)
         self._desc.setPlaceholderText("Description optionnelle...")
 
         form.addRow("Catégorie:", self._category)
         form.addRow("Montant *:", self._amount)
+        form.addRow("Récurrence:", self._recurrence)
+        form.addRow(self._recurrence_custom_row_label, custom_row)
         form.addRow("Description:", self._desc)
         layout.addLayout(form)
 
@@ -156,9 +234,29 @@ class ExpenseDialog(QDialog):
         btn_row.addWidget(btn_save)
         layout.addLayout(btn_row)
 
+    def _sync_custom_recurrence_visibility(self):
+        interval, unit = self._recurrence.currentData()
+        is_custom = interval == _CUSTOM_RECURRENCE
+        self._recurrence_custom_row_label.setVisible(is_custom)
+        self._recurrence_custom_value.setVisible(is_custom)
+        self._recurrence_custom_unit.setVisible(is_custom)
+
+    def _selected_recurrence(self) -> tuple[int | None, str | None]:
+        interval, unit = self._recurrence.currentData()
+        if interval == _CUSTOM_RECURRENCE:
+            return self._recurrence_custom_value.value(), self._recurrence_custom_unit.currentData()
+        return interval, unit
+
     def _save(self):
         if self._amount.value() <= 0:
             QMessageBox.warning(self, "Erreur", "Le montant doit être supérieur à 0.")
             return
-        ExpenseController.create(self._category.currentText(), self._amount.value(), self._desc.text())
+        interval, unit = self._selected_recurrence()
+        ExpenseController.create(
+            self._category.currentText(),
+            self._amount.value(),
+            self._desc.text(),
+            interval,
+            unit,
+        )
         self.accept()

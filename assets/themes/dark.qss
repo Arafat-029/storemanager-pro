@@ -328,6 +328,10 @@ QFrame#separator, QFrame[cssClass="separator"] { background: #1A2744; max-height
 /* ── Search bar ── */
 QLineEdit#searchBar { background: #0A1222; border: 1.5px solid #1A2744; border-radius: 24px; padding: 10px 16px; font-size: 14px; color: #E2E8F0; }
 QLineEdit#searchBar:focus { border-color: #1E88E5; background: #0D1A30; }
+QPushButton#posSearchBtn {
+    border-radius: 10px; font-size: 13px; font-weight: 700; padding: 0 18px;
+    min-height: 60px; max-height: 60px;
+}
 
 /* ── POS Cart panel ── */
 /* Width is owned by POSView (setFixedWidth) — no min/max here. */
@@ -339,8 +343,8 @@ QLineEdit#searchBar:focus { border-color: #1E88E5; background: #0D1A30; }
 QPushButton#cartClearBtn {
     background: rgba(220, 38, 38, 0.14); border: 1px solid rgba(220, 38, 38, 0.40);
     border-radius: 7px;
-    color: #F87171; font-size: 11px; font-weight: 700; padding: 0 10px;
-    min-height: 26px; max-height: 26px;
+    color: #F87171; font-size: 11px; font-weight: 700; padding: 0 14px;
+    min-height: 42px; max-height: 42px;
 }
 QPushButton#cartClearBtn:hover   { background: rgba(220, 38, 38, 0.26); border-color: #DC2626; }
 QPushButton#cartClearBtn:pressed { background: rgba(220, 38, 38, 0.36); }
@@ -360,26 +364,26 @@ QPushButton#cartClearBtn:disabled {
 QPushButton#cartQtyBtn {
     background: #0A1222; border: 1px solid #1A2744; border-radius: 8px;
     color: #CBD5E1; font-size: 14px; font-weight: 800; padding: 0;
-    min-height: 26px; max-height: 26px;
+    min-height: 42px; max-height: 42px;
 }
 QPushButton#cartQtyBtn:hover { background: #142238; }
 QPushButton#cartRemoveBtn {
     background: rgba(233, 30, 99, 0.16); border: none; border-radius: 8px;
     color: #F87171; font-size: 14px; font-weight: 800; padding: 0;
-    min-height: 28px; max-height: 28px;
+    min-height: 44px; max-height: 44px;
 }
 QPushButton#cartRemoveBtn:hover { background: rgba(233, 30, 99, 0.28); }
 
 QLineEdit#cartManualInput {
     background: #0A1222; border: 1px solid #1A2744; border-radius: 8px;
     padding: 0 10px; font-size: 12px; font-weight: 600; color: #CBD5E1;
-    min-height: 32px; max-height: 32px;
+    min-height: 46px; max-height: 46px;
 }
 QLineEdit#cartManualInput:focus { border-color: #1E88E5; background: #0D1A30; }
 QPushButton#cartAddManualBtn {
     background: #111B2E; border: 1px solid #1A2744; border-radius: 8px;
-    color: #94A3B8; font-size: 11px; font-weight: 600; padding: 0 8px;
-    min-height: 32px; max-height: 32px;
+    color: #94A3B8; font-size: 11px; font-weight: 600; padding: 0 10px;
+    min-height: 46px; max-height: 46px;
 }
 QPushButton#cartAddManualBtn:hover { background: #142238; color: #E2E8F0; }
 

@@ -8,6 +8,8 @@ EXPENSE_CATEGORIES = [
     "Transport", "Maintenance", "Fournitures", "Publicité", "Autres",
 ]
 
+RECURRENCE_UNITS = ("day", "week", "month", "year")
+
 
 class ExpenseController:
 
@@ -29,10 +31,29 @@ class ExpenseController:
         """, tuple(params))
 
     @staticmethod
-    def create(category: str, amount: float, description: str = "") -> int:
+    def create(
+        category: str,
+        amount: float,
+        description: str = "",
+        recurrence_interval: int | None = None,
+        recurrence_unit: str | None = None,
+    ) -> int:
+        if recurrence_unit is not None and recurrence_unit not in RECURRENCE_UNITS:
+            raise ValueError(f"Unité de récurrence invalide : {recurrence_unit}")
+        if not recurrence_interval or not recurrence_unit:
+            recurrence_interval = None
+            recurrence_unit = None
         cur = db.execute(
-            "INSERT INTO expenses (user_id, category, amount, description) VALUES (?,?,?,?)",
-            (AuthController.current_user()["id"], category, amount, description),
+            "INSERT INTO expenses (user_id, category, amount, description, recurrence_interval, recurrence_unit) "
+            "VALUES (?,?,?,?,?,?)",
+            (
+                AuthController.current_user()["id"],
+                category,
+                amount,
+                description,
+                recurrence_interval,
+                recurrence_unit,
+            ),
         )
         AuthController.log("EXPENSE_CREATE", f"Dépense: {category} - {amount}")
         return cur.lastrowid

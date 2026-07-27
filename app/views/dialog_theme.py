@@ -10,8 +10,12 @@ QDialog {
     border: 1px solid #E0E6EF;
     border-radius: 14px;
 }
-QDialog > QWidget,
-QDialog QWidget,
+/* Scoped to actual container classes only (QFrame/QScrollArea), not the bare
+   "QWidget" class: since every widget (QPushButton, QLineEdit, ...) IS a
+   QWidget, a catch-all "QDialog QWidget" selector has 2 type-selectors of
+   specificity and silently outranks the single-type-selector rules below it
+   (QPushButton, QLineEdit, ...), making every default button/input render
+   with a transparent, colorless look instead of its intended style. */
 QDialog QFrame,
 QDialog QScrollArea,
 QDialog QScrollArea > QWidget,
@@ -154,11 +158,11 @@ QHeaderView::section {
 }
 QMessageBox,
 QMessageBox QWidget {
-    background: #162447;
-    color: #F8FAFC;
+    background: #FFFFFF;
+    color: #1B2A4A;
 }
 QMessageBox QLabel {
-    color: #F8FAFC;
+    color: #1B2A4A;
     font-size: 13px;
     font-weight: 600;
 }
@@ -168,14 +172,14 @@ QMessageBox QPushButton {
     padding: 8px 16px;
     background: #2563EB;
     color: #FFFFFF;
-    border: 1px solid #60A5FA;
+    border: none;
     border-radius: 8px;
 }
 QMessageBox QPushButton:hover {
-    background: #3B82F6;
+    background: #1D4ED8;
 }
 QMessageBox QPushButton:pressed {
-    background: #1D4ED8;
+    background: #1E40AF;
 }
 """
 
@@ -186,8 +190,9 @@ QDialog {
     border: 1px solid #1A2744;
     border-radius: 14px;
 }
-QDialog > QWidget,
-QDialog QWidget,
+/* See the light-theme comment above: keep this scoped to QFrame/QScrollArea,
+   not the bare "QWidget" class, or it silently wins over QPushButton/
+   QLineEdit/etc. on CSS specificity and strips their intended styling. */
 QDialog QFrame,
 QDialog QScrollArea,
 QDialog QScrollArea > QWidget,
