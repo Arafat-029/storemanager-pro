@@ -243,7 +243,7 @@ class DashboardView(QWidget):
         self._month_grid.setHorizontalSpacing(14)
         self._month_grid.setVerticalSpacing(14)
 
-        self._card_profit_today = StatCard("Gain net (hors loyer/électricité)", "0.000 TND", "📊", "#0F766E", colored=False)
+        self._card_profit_today = StatCard("Gain net du jour", "0.000 TND", "📊", "#0F766E", colored=False)
         self._card_month = StatCard("CA du mois", "0.000 TND", "📈", "#0891B2", colored=False)
         self._card_inv_val = StatCard("Valeur du stock", "0.000 TND", "🏭", "#7C3AED", colored=False)
         self._card_expenses = StatCard("Dépenses du mois", "0.000 TND", "💸", "#EA580C", colored=False)
@@ -304,7 +304,10 @@ class DashboardView(QWidget):
 
         self._profit_frame.layout().insertLayout(1, profit_period_row)
 
-        self._profit_note_lbl = QLabel("Courbe hors dépenses Loyer / Électricité")
+        self._profit_note_lbl = QLabel(
+            "Marge encaissée moins toutes les dépenses (les dépenses récurrentes "
+            "sont comptées à chaque échéance)"
+        )
         self._profit_note_lbl.setStyleSheet("color: #64748B; font-size: 11px;")
         self._profit_frame.layout().insertWidget(2, self._profit_note_lbl)
 
@@ -394,13 +397,11 @@ class DashboardView(QWidget):
     def _refresh_profit_chart(self) -> None:
         labels = {
             "day": "📈  Courbe de gain net par jour",
-            "month": "📈  Courbe mensuelle (avec charges périodiques)",
+            "month": "📈  Courbe de gain net par mois",
             "year": "📈  Courbe de gain net par année",
         }
         self._profit_title_lbl.setText(labels.get(self._profit_period, labels["day"]))
         self._profit_chart.set_data(SaleController.get_profit_series(self._profit_period))
-        if hasattr(self, "_profit_note_lbl"):
-            self._profit_note_lbl.setVisible(self._profit_period == "month")
 
     def refresh(self):
         from datetime import datetime

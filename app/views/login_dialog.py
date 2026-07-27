@@ -1,10 +1,11 @@
 from __future__ import annotations
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QPushButton, QFrame, QApplication,
+    QLineEdit, QPushButton, QFrame, QMessageBox,
 )
 from PySide6.QtCore import Qt
 from app.controllers.auth_controller import AuthController
+from app.views.dialog_theme import light_question
 
 
 class LoginDialog(QDialog):
@@ -13,6 +14,7 @@ class LoginDialog(QDialog):
         self.setWindowTitle("Connexion — StoreManager Pro")
         self.setFixedSize(440, 560)
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self._quit_confirmed = False
         self._build_ui()
 
     def _build_ui(self):
@@ -38,12 +40,18 @@ class LoginDialog(QDialog):
         close_row.addStretch()
         btn_close_x = QPushButton("✕")
         btn_close_x.setFixedSize(28, 28)
+        # The app-wide QPushButton rule carries its own min-height/padding that
+        # overrides setFixedSize(), stretching this into a tall pill — pin the
+        # box explicitly so it stays a 28px circle.
         btn_close_x.setStyleSheet(
             "QPushButton { background: rgba(255,255,255,0.2); color: white;"
-            "border: none; border-radius: 14px; font-size: 13px; font-weight: 700; }"
+            "border: none; border-radius: 14px; font-size: 13px; font-weight: 700;"
+            "padding: 0; min-width: 28px; max-width: 28px; min-height: 28px; max-height: 28px; }"
             "QPushButton:hover { background: rgba(255,255,255,0.4); }"
         )
-        btn_close_x.clicked.connect(QApplication.quit)
+        btn_close_x.setCursor(Qt.PointingHandCursor)
+        btn_close_x.setToolTip("Quitter l'application")
+        btn_close_x.clicked.connect(self.reject)
         close_row.addWidget(btn_close_x)
         h_layout.addLayout(close_row)
 
@@ -144,6 +152,28 @@ class LoginDialog(QDialog):
         form_layout.addWidget(hint)
 
         layout.addWidget(form)
+
+    def reject(self):
+        """Single exit gate for the login screen.
+
+        Both callers (main.py at startup and MainWindow._logout) treat a
+        non-accepted result as "quit the application", so every path that
+        closes this dialog without a successful login — the ✕ button and the
+        Escape key alike — must confirm first instead of killing the app
+        silently.
+        """
+        if not self._quit_confirmed and not self._confirm_quit():
+            return
+        super().reject()
+
+    def _confirm_quit(self) -> bool:
+        confirmed = light_question(
+            self,
+            "Quitter l'application",
+            "Voulez-vous vraiment quitter StoreManager Pro ?",
+        ) == QMessageBox.Yes
+        self._quit_confirmed = confirmed
+        return confirmed
 
     def _do_login(self):
         username = self._username.text().strip()

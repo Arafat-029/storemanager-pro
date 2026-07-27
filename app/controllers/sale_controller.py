@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+import calendar
 import unicodedata
 
 from app.database.connection import db
@@ -33,58 +34,108 @@ def _normalized_expense_category(value: str | None) -> str:
     return text.strip().casefold()
 
 
-_EXCLUDED_PROFIT_EXPENSE_CATEGORIES = {"loyer", "electricite", "eau"}
+def _period_key_for_date(period: str, value: date) -> str:
+    if period == "month":
+        return value.strftime("%Y-%m")
+    if period == "year":
+        return value.strftime("%Y")
+    return value.isoformat()
 
 
-def _periodic_category_meta() -> dict[str, dict]:
-    return {
-        "loyer": {"months_interval": 1},
-        "electricite": {"months_interval": 2},
-        "eau": {"months_interval": 2},
-    }
+def _add_months(value: date, months: int) -> date:
+    """Shift by whole months, clamping the day to the target month's length
+    (so a charge recorded the 31st still lands on the 30th / 28th)."""
+    total = (value.year * 12) + (value.month - 1) + months
+    year, month = divmod(total, 12)
+    month += 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
 
 
-def _latest_periodic_expense_templates() -> dict[str, dict]:
+def _recurrence_occurrences(start: date, interval: int, unit: str, until: date) -> list[date]:
+    """Every due date of a recurring expense, from its own record date up to
+    *until* (inclusive). Never projects before the expense was recorded and
+    never past *until*, so the curve cannot invent charges outside the period
+    the business actually carried them."""
+    if interval <= 0 or start > until:
+        return []
+
+    occurrences: list[date] = []
+    step = 0
+    # Hard cap: a daily charge over a 5-year window is ~1830 points; the bound
+    # keeps a corrupt interval/unit from spinning forever.
+    while step < 4000:
+        if unit == "day":
+            current = start + timedelta(days=interval * step)
+        elif unit == "week":
+            current = start + timedelta(weeks=interval * step)
+        elif unit == "month":
+            current = _add_months(start, interval * step)
+        elif unit == "year":
+            current = _add_months(start, 12 * interval * step)
+        else:
+            return [start] if start <= until else []
+        if current > until:
+            break
+        occurrences.append(current)
+        step += 1
+    return occurrences
+
+
+def _expense_totals_by_period(period: str, period_keys: list[str]) -> dict[str, float]:
+    """Total expenses charged to each period key.
+
+    Every recorded expense counts in the period it was recorded. An expense
+    that carries a recurrence (recurrence_interval + recurrence_unit) also
+    counts in each later period it falls due, up to today — that is what makes
+    a monthly rent entered once show up every month instead of only once.
+
+    A projected occurrence is skipped when the user separately recorded an
+    expense of the same category in that period: the real entry is the
+    authoritative amount and must not be doubled.
+    """
+    wanted = set(period_keys)
+    if not wanted:
+        return {}
+
     rows = db.fetchall(
-        f"""
-        SELECT category, amount, created_at
-        FROM expenses
-        WHERE LOWER(category) IN ('loyer', 'electricite', 'eau', 'électricité')
-        ORDER BY created_at DESC
-        """
+        "SELECT category, amount, recurrence_interval, recurrence_unit, created_at FROM expenses"
     )
-    templates: dict[str, dict] = {}
+
+    totals: dict[str, float] = {}
+    # (period_key, normalized category) actually recorded by the user.
+    recorded: set[tuple[str, str]] = set()
+    parsed: list[tuple[date, str, float, int, str]] = []
+
     for row in rows:
-        key = _normalized_expense_category(row.get("category"))
-        if key == "electricite" or key == "eau" or key == "loyer":
-            if key not in templates:
-                templates[key] = {
-                    "amount": round(float(row.get("amount") or 0.0), 3),
-                    "created_at": str(row.get("created_at") or ""),
-                }
-    return templates
-
-
-def _month_distance(start_month: str, current_month: str) -> int:
-    start_year, start_m = [int(x) for x in start_month.split("-")]
-    current_year, current_m = [int(x) for x in current_month.split("-")]
-    return (current_year - start_year) * 12 + (current_m - start_m)
-
-
-def _periodic_expenses_for_month(month_key: str, templates: dict[str, dict]) -> float:
-    total = 0.0
-    meta = _periodic_category_meta()
-    for category_key, template in templates.items():
-        amount = round(float(template.get("amount") or 0.0), 3)
-        if amount <= 0:
+        raw_created = str(row.get("created_at") or "")[:10]
+        try:
+            created = date.fromisoformat(raw_created)
+        except ValueError:
             continue
-        created_at = str(template.get("created_at") or "")[:7]
-        if not created_at or len(created_at) != 7:
-            continue
-        interval = int(meta.get(category_key, {}).get("months_interval", 1))
-        if _month_distance(created_at, month_key) % interval == 0:
-            total = round(total + amount, 3)
-    return total
+        amount = round(float(row.get("amount") or 0.0), 3)
+        category = _normalized_expense_category(row.get("category"))
+        key = _period_key_for_date(period, created)
+        recorded.add((key, category))
+        if key in wanted:
+            totals[key] = round(totals.get(key, 0.0) + amount, 3)
+
+        interval = int(row.get("recurrence_interval") or 0)
+        unit = str(row.get("recurrence_unit") or "")
+        if interval > 0 and unit:
+            parsed.append((created, category, amount, interval, unit))
+
+    today = datetime.now().date()
+    for created, category, amount, interval, unit in parsed:
+        for occurrence in _recurrence_occurrences(created, interval, unit, today):
+            if occurrence == created:
+                continue  # already counted above as the recorded entry
+            key = _period_key_for_date(period, occurrence)
+            if key not in wanted or (key, category) in recorded:
+                continue
+            totals[key] = round(totals.get(key, 0.0) + amount, 3)
+
+    return totals
 
 
 class SaleController:
@@ -663,9 +714,8 @@ class SaleController:
         return db.mysql_date_format(column, "%d/%m") if db.is_mysql() else db.sqlite_strftime("%d/%m", column)
 
     @staticmethod
-    def _profit_rows_for_period(period: str, start_key: str) -> tuple[dict[str, float], dict[str, float]]:
+    def _gross_profit_by_period(period: str, start_key: str) -> dict[str, float]:
         period_expr_payments = SaleController._period_expr(period, "sp.created_at")
-        period_expr_expenses = SaleController._period_expr(period, "created_at")
 
         payment_rows = db.fetchall(
             f"""
@@ -697,60 +747,39 @@ class SaleController:
             """,
             (start_key,),
         )
-        expense_rows = db.fetchall(
-            f"""
-            SELECT
-                {period_expr_expenses} AS period_key,
-                category,
-                COALESCE(SUM(amount), 0) AS total_expenses
-            FROM expenses
-            WHERE {db.date_only_expr('created_at')} >= ?
-            GROUP BY period_key, category
-            ORDER BY period_key, category
-            """,
-            (start_key,),
-        )
-        sales_by_period = {str(row["period_key"]): round(float(row.get("gross_profit") or 0.0), 3) for row in payment_rows}
-        expenses_by_period: dict[str, float] = {}
-        for row in expense_rows:
-            category_key = _normalized_expense_category(row.get("category"))
-            if category_key in _EXCLUDED_PROFIT_EXPENSE_CATEGORIES:
-                continue
-            period_key = str(row.get("period_key") or "")
-            expenses_by_period[period_key] = round(
-                expenses_by_period.get(period_key, 0.0) + float(row.get("total_expenses") or 0.0),
-                3,
-            )
-        return sales_by_period, expenses_by_period
+        return {
+            str(row["period_key"]): round(float(row.get("gross_profit") or 0.0), 3)
+            for row in payment_rows
+        }
 
     @staticmethod
     def get_profit_series(period: str = "day") -> list[dict]:
         period = (period or "day").strip().lower()
 
+        # Every branch below is the same formula, only the bucket size changes:
+        #   net = (margin on payments actually received) - (expenses due)
         if period == "month":
             month_count = 12
             now = datetime.now().replace(day=1)
             start_dt = SaleController._shift_months(now, -(month_count - 1))
             start_key = start_dt.strftime("%Y-%m-%d")
-            sales_by_period, expenses_by_period = SaleController._profit_rows_for_period("month", start_key)
-            periodic_templates = _latest_periodic_expense_templates()
+            gross_by_period = SaleController._gross_profit_by_period("month", start_key)
+            keys = [
+                SaleController._shift_months(start_dt, offset).strftime("%Y-%m")
+                for offset in range(month_count)
+            ]
+            expenses_by_period = _expense_totals_by_period("month", keys)
             points: list[dict] = []
-            for offset in range(month_count):
+            for offset, key in enumerate(keys):
                 current_dt = SaleController._shift_months(start_dt, offset)
-                key = current_dt.strftime("%Y-%m")
-                periodic_expense = _periodic_expenses_for_month(key, periodic_templates)
-                net_profit = round(
-                    sales_by_period.get(key, 0.0)
-                    - expenses_by_period.get(key, 0.0)
-                    - periodic_expense,
-                    3,
-                )
+                expense_total = expenses_by_period.get(key, 0.0)
+                net_profit = round(gross_by_period.get(key, 0.0) - expense_total, 3)
                 points.append(
                     {
                         "date": key,
                         "label": current_dt.strftime("%m/%Y"),
                         "profit": net_profit,
-                        "periodic_expense": periodic_expense,
+                        "expenses": expense_total,
                     }
                 )
             return points
@@ -760,25 +789,37 @@ class SaleController:
             now = datetime.now()
             start_year = now.year - (year_count - 1)
             start_key = f"{start_year}-01-01"
-            sales_by_period, expenses_by_period = SaleController._profit_rows_for_period("year", start_key)
+            gross_by_period = SaleController._gross_profit_by_period("year", start_key)
+            keys = [str(year) for year in range(start_year, now.year + 1)]
+            expenses_by_period = _expense_totals_by_period("year", keys)
             points: list[dict] = []
-            for year in range(start_year, now.year + 1):
-                key = str(year)
-                net_profit = round(sales_by_period.get(key, 0.0) - expenses_by_period.get(key, 0.0), 3)
-                points.append({"date": key, "label": key, "profit": net_profit})
+            for key in keys:
+                expense_total = expenses_by_period.get(key, 0.0)
+                net_profit = round(gross_by_period.get(key, 0.0) - expense_total, 3)
+                points.append({"date": key, "label": key, "profit": net_profit, "expenses": expense_total})
             return points
 
         days = 30
         start_date = (datetime.now() - timedelta(days=days - 1)).date().isoformat()
-        sales_by_period, expenses_by_period = SaleController._profit_rows_for_period("day", start_date)
+        gross_by_period = SaleController._gross_profit_by_period("day", start_date)
+
+        start_dt = datetime.fromisoformat(start_date)
+        day_dates = [(start_dt + timedelta(days=offset)).date() for offset in range(days)]
+        keys = [d.isoformat() for d in day_dates]
+        expenses_by_period = _expense_totals_by_period("day", keys)
 
         points: list[dict] = []
-        start_dt = datetime.fromisoformat(start_date)
-        for offset in range(days):
-            current_day = (start_dt + timedelta(days=offset)).date()
-            key = current_day.isoformat()
-            net_profit = round(sales_by_period.get(key, 0.0) - expenses_by_period.get(key, 0.0), 3)
-            points.append({"date": key, "label": current_day.strftime("%d/%m"), "profit": net_profit})
+        for current_day, key in zip(day_dates, keys):
+            expense_total = expenses_by_period.get(key, 0.0)
+            net_profit = round(gross_by_period.get(key, 0.0) - expense_total, 3)
+            points.append(
+                {
+                    "date": key,
+                    "label": current_day.strftime("%d/%m"),
+                    "profit": net_profit,
+                    "expenses": expense_total,
+                }
+            )
         return points
 
     @staticmethod

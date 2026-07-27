@@ -43,8 +43,8 @@ _PAD       = 16
 
 _CARD_W  = 134
 _CARD_MAX_W = 220  # upper bound a card can stretch to in the responsive grid
-_CARD_H  = 182
-_IMG_H   = 102
+_CARD_H  = 206
+_IMG_H   = 128   # the product photo is the card's main subject
 _COLS    = 6
 
 _SEARCH_H = 60   # the search field and its button share this exact height
@@ -1515,12 +1515,14 @@ class POSView(QWidget):
                     img_loaded = True
 
         if not img_loaded:
+            # Neutral placeholder rather than a per-category tint: with a wall of
+            # 6 columns, one hue per category turned the grid into noise. Slate
+            # tones keep it calm while staying clearly legible.
             initial = (product["name"][0]).upper() if product["name"] else "?"
-            color   = product.get("category_color") or "#059669"
             img_lbl.setText(initial)
             img_lbl.setStyleSheet(
-                f"background: {color}22; color: {color};"
-                "font-size: 44px; font-weight: 800;"
+                "background: #F1F5F9; color: #94A3B8;"
+                "font-size: 46px; font-weight: 800;"
                 "border-radius: 6px 6px 0 0;"
             )
 

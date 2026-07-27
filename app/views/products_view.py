@@ -28,26 +28,11 @@ from app.views.dialog_theme import apply_light_dialog_theme
 from config import PRODUCT_IMAGES_DIR
 
 
-# Category → accent color mapping for card badges / placeholders
-_CAT_COLORS: dict[str, str] = {
-    "Produits laitiers":       "#2196F3",
-    "Yaourts":                 "#9C27B0",
-    "Boulangerie":             "#FF9800",
-    "Pâtisseries":             "#E91E63",
-    "Boissons":                "#00BCD4",
-    "Fruits et légumes":       "#4CAF50",
-    "Produits ménagers":       "#607D8B",
-    "Épicerie":                "#FF5722",
-    "Produits au poids":       "#8D6E63",
-    "Autres (Pièces uniques)": "#FF6B35",
-    "Autres":                  "#9E9E9E",
-}
-
 _UNIT_LABELS = {"piece": "pcs", "kg": "kg", "litre": "L"}
 
 _PRODUCTS_PER_ROW = 7
 _CARD_MIN_WIDTH = 165
-_CARD_IMAGE_HEIGHT = 110
+_CARD_IMAGE_HEIGHT = 158  # the product photo is the card's main subject
 _CARD_BODY_HORIZONTAL_PADDING = 10
 
 _CARD_QSS = (
@@ -160,7 +145,6 @@ class _ProductCard(QFrame):
     def _build(self):
         p        = self._product
         cat_name = p.get("category_name") or ""
-        color    = _CAT_COLORS.get(cat_name, "#059669")
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 12)
@@ -181,10 +165,12 @@ class _ProductCard(QFrame):
                 "border-radius: 12px 12px 0 0; background: #F9FAFB;"
             )
         else:
+            # Neutral placeholder rather than a per-category tint: keeps the grid
+            # calm and consistent when several products have no photo.
             initial = (p.get("name") or "?")[0].upper()
             img_lbl.setText(initial)
             img_lbl.setStyleSheet(
-                f"background: {color}20; color: {color};"
+                "background: #F1F5F9; color: #94A3B8;"
                 "font-size: 56px; font-weight: 800;"
                 "border-radius: 12px 12px 0 0;"
             )
@@ -205,14 +191,12 @@ class _ProductCard(QFrame):
         body.addWidget(name_lbl)
 
         if cat_name:
-            badge = QLabel(cat_name)
-            badge.setMaximumWidth(self._body_width)
-            badge.setStyleSheet(
-                f"background: {color}22; color: {color};"
-                "font-size: 10px; font-weight: 700; padding: 2px 8px;"
-                "border-radius: 10px;"
-            )
-            body.addWidget(badge)
+            # Plain secondary text — no colored pill/band, so the photo stays
+            # the only thing carrying color on the card.
+            cat_lbl = QLabel(cat_name)
+            cat_lbl.setMaximumWidth(self._body_width)
+            cat_lbl.setStyleSheet("font-size: 10px; color: #9CA3AF;")
+            body.addWidget(cat_lbl)
 
         supplier_name = p.get("supplier_name") or ""
         if supplier_name:
@@ -391,6 +375,11 @@ class ProductsView(QWidget):
         while self._grid.count():
             item = self._grid.takeAt(0)
             if w := item.widget():
+                # takeAt() only detaches from the layout; the widget stays a
+                # visible child at its old position until deleteLater() runs on
+                # the next event-loop turn, so old cards briefly show through
+                # behind the new ones. Hide immediately to avoid that.
+                w.hide()
                 w.deleteLater()
 
         self._count_lbl.setText(f"{len(products)} produit(s)")
