@@ -428,12 +428,15 @@ class MainWindow(QMainWindow):
             }
             QPushButton {
                 min-width: 132px;
-                padding: 9px 16px;
+                min-height: 44px;
+                max-height: 44px;
+                padding: 0 16px;
                 border-radius: 10px;
+                border: 1.5px solid transparent;
             }
             QPushButton#btnSecondary {
                 background: #F8FAFC;
-                border: 1.5px solid #CBD5E1;
+                border-color: #CBD5E1;
                 color: #475569;
             }
             QPushButton#btnSecondary:hover {

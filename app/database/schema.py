@@ -17,12 +17,14 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS categories (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT    NOT NULL UNIQUE,
-    description TEXT,
-    color       TEXT    DEFAULT '#4CAF50',
-    image_path  TEXT,
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT    NOT NULL UNIQUE,
+    description     TEXT,
+    color           TEXT    DEFAULT '#4CAF50',
+    image_path      TEXT,
+    is_sensitive    INTEGER NOT NULL DEFAULT 0,
+    shelf_life_days INTEGER,
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS suppliers (
@@ -105,6 +107,12 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     quantity        REAL    NOT NULL,
     reference       TEXT,
     notes           TEXT,
+    -- Losses reuse movement_type='out' (the CHECK above predates them and
+    -- SQLite cannot alter a CHECK in place). loss_reason IS NOT NULL is what
+    -- separates a loss from a sale; unit_cost freezes the purchase price at
+    -- the time of the loss so the accounting stays right if prices change.
+    loss_reason     TEXT,
+    unit_cost       REAL,
     created_at      TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
@@ -197,6 +205,7 @@ CREATE TABLE IF NOT EXISTS product_sale_units (
     barcode         TEXT    UNIQUE,
     is_default      INTEGER NOT NULL DEFAULT 0,
     is_active       INTEGER NOT NULL DEFAULT 1,
+    unit_kind       TEXT    NULL,
     created_at      TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
     updated_at      TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
 );
@@ -258,6 +267,8 @@ CREATE TABLE IF NOT EXISTS categories (
     description TEXT NULL,
     color VARCHAR(32) DEFAULT '#4CAF50',
     image_path TEXT NULL,
+    is_sensitive TINYINT(1) NOT NULL DEFAULT 0,
+    shelf_life_days INT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -347,6 +358,8 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     quantity DOUBLE NOT NULL,
     reference VARCHAR(255) NULL,
     notes TEXT NULL,
+    loss_reason VARCHAR(32) NULL,
+    unit_cost DOUBLE NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_stock_movements_product FOREIGN KEY (product_id) REFERENCES products(id),
     CONSTRAINT fk_stock_movements_user FOREIGN KEY (user_id) REFERENCES users(id)
@@ -426,6 +439,7 @@ CREATE TABLE IF NOT EXISTS product_sale_units (
     barcode VARCHAR(191) NULL UNIQUE,
     is_default TINYINT(1) NOT NULL DEFAULT 0,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
+    unit_kind VARCHAR(16) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_product_sale_units_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
@@ -839,11 +853,6 @@ def _migrate():
         )
         conn.commit()
 
-    _execute(
-        conn,
-        _insert_ignore_query("categories", ["name", "description", "color"]),
-        ("Autres (Pièces uniques)", "Produits vendus à l'unité (ex: triangle de fromage)", "#FF6B35"),
-    )
     default_supplier_id = _ensure_default_supplier(conn)
     _execute(
         conn,
@@ -852,6 +861,42 @@ def _migrate():
     )
     conn.commit()
     _migrate_sales_payment_fields(conn)
+
+    # Reception alerts: which categories deserve a warning, and how long their
+    # products keep. Held on the category (not the product) so the admin
+    # configures a rule once instead of per item.
+    category_columns = db.table_columns("categories")
+    if "is_sensitive" not in category_columns:
+        _execute(conn, "ALTER TABLE categories ADD COLUMN is_sensitive INTEGER NOT NULL DEFAULT 0")
+        conn.commit()
+    if "shelf_life_days" not in category_columns:
+        _execute(conn, "ALTER TABLE categories ADD COLUMN shelf_life_days INTEGER NULL")
+        conn.commit()
+
+    # Stock losses. They reuse movement_type='out' because the CHECK on that
+    # column predates them and SQLite cannot alter a CHECK in place; a non-null
+    # loss_reason is what tells a loss apart from a sale.
+    movement_columns = db.table_columns("stock_movements")
+    if "loss_reason" not in movement_columns:
+        _execute(conn, "ALTER TABLE stock_movements ADD COLUMN loss_reason VARCHAR(32) NULL")
+        conn.commit()
+    if "unit_cost" not in movement_columns:
+        _execute(conn, "ALTER TABLE stock_movements ADD COLUMN unit_cost DOUBLE NULL")
+        conn.commit()
+
+    if "unit_kind" not in db.table_columns("product_sale_units"):
+        _execute(conn, "ALTER TABLE product_sale_units ADD COLUMN unit_kind VARCHAR(16) NULL")
+        conn.commit()
+        # One-off backfill: rows created before this column existed were only
+        # ever "pack" rows (the "piece_lot"/"piece_single" kinds didn't exist
+        # yet), identified the same way the app already did at runtime.
+        _execute(
+            conn,
+            "UPDATE product_sale_units SET unit_kind='pack' "
+            "WHERE is_default=0 AND unit_kind IS NULL "
+            "AND (quantity > 1 OR lower(name) LIKE '%pack%')",
+        )
+        conn.commit()
 
 
 
@@ -1044,10 +1089,19 @@ def _seed_defaults():
         ("001", cashier_pw, "Caissier", "cashier"),
     )
 
-    for name, desc, color in DEFAULT_CATEGORIES:
+    # Default categories are only ever seeded once. Without this guard, a
+    # category the user deletes gets silently recreated on the next launch
+    # by this same INSERT-OR-IGNORE loop, since nothing marks it as
+    # deliberately removed.
+    if not db.fetchone("SELECT value FROM settings WHERE `key`='categories_seeded'"):
+        for name, desc, color in DEFAULT_CATEGORIES:
+            db.execute(
+                _insert_ignore_query("categories", ["name", "description", "color"]),
+                (name, desc, color),
+            )
         db.execute(
-            _insert_ignore_query("categories", ["name", "description", "color"]),
-            (name, desc, color),
+            _insert_ignore_query("settings", ["`key`", "value"]),
+            ("categories_seeded", "1"),
         )
 
     for key, value in DEFAULT_SETTINGS:

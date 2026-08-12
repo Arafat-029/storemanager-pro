@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QFrame,
@@ -15,6 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.controllers.stock_controller import StockController
 from app.controllers.supplier_controller import SupplierController
 from app.views.widgets.price_input import PriceSpinBox
 from app.views.widgets.quantity_input import QuantitySpinBox
@@ -185,6 +187,113 @@ class _InvoiceItemRow(QWidget):
             "pack_piece_count": self._pack_piece_count,
             "loose_qty": loose_qty,
         }
+
+
+class _ReceptionWarningsDialog(QDialog):
+    """Informative check shown before a delivery is added to the stock.
+
+    Never blocks on its own — the admin can always continue. Its job is to put
+    the products that need a look (sensitive categories, short shelf life,
+    expiry dates) in front of them while it is still cheap to refuse a crate.
+    """
+
+    def __init__(self, warnings: list[dict], parent=None):
+        super().__init__(parent)
+        self._warnings = warnings
+        self.setWindowTitle("Vérifications avant réception")
+        self.setMinimumWidth(560)
+        self.setStyleSheet(_WHITE_QSS)
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(14)
+
+        title = QLabel("⚠️  Produits à vérifier")
+        title.setStyleSheet("font-size: 17px; font-weight: 700; color: #B45309;")
+        layout.addWidget(title)
+
+        intro = QLabel(
+            f"{len(self._warnings)} produit(s) de cette livraison demandent une vérification "
+            "avant l'ajout au stock."
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet("font-size: 12px; color: #6B7280;")
+        layout.addWidget(intro)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setMaximumHeight(320)
+        content = QWidget()
+        content_lay = QVBoxLayout(content)
+        content_lay.setContentsMargins(0, 0, 0, 0)
+        content_lay.setSpacing(10)
+
+        for warning in self._warnings:
+            card = QFrame()
+            # Scoped by objectName: QLabel inherits from QFrame, so a bare
+            # "QFrame { ... }" rule here would draw the border around every
+            # line of text inside the card too.
+            card.setObjectName("warnCard")
+            card.setStyleSheet(
+                "QFrame#warnCard { background: #FFFBEB; border: 1px solid #FDE68A;"
+                " border-radius: 8px; }"
+                "QFrame#warnCard QLabel { border: none; background: transparent; }"
+            )
+            card_lay = QVBoxLayout(card)
+            card_lay.setContentsMargins(12, 10, 12, 10)
+            card_lay.setSpacing(4)
+
+            head = QLabel(f"<b>{warning['product_name']}</b> — {warning['quantity']:g} reçu(s)")
+            head.setStyleSheet("font-size: 13px; color: #111827; background: transparent;")
+            card_lay.addWidget(head)
+
+            for message in warning["messages"]:
+                line = QLabel(f"• {message}")
+                line.setWordWrap(True)
+                line.setStyleSheet("font-size: 12px; color: #92400E; background: transparent;")
+                card_lay.addWidget(line)
+
+            content_lay.addWidget(card)
+
+        content_lay.addStretch()
+        scroll.setWidget(content)
+        layout.addWidget(scroll)
+
+        # Only offered when at least one category declares a shelf life.
+        self._apply_expiry = None
+        datable = [w for w in self._warnings if w.get("suggested_expiry")]
+        if datable:
+            self._apply_expiry = QCheckBox(
+                f"Mettre à jour la date d'expiration de {len(datable)} produit(s) "
+                "d'après la durée de conservation"
+            )
+            self._apply_expiry.setChecked(True)
+            self._apply_expiry.setStyleSheet("font-size: 12px; color: #111827;")
+            layout.addWidget(self._apply_expiry)
+
+            note = QLabel(
+                "Un produit n'a qu'une seule date d'expiration : celle-ci remplacera la précédente."
+            )
+            note.setWordWrap(True)
+            note.setStyleSheet("font-size: 11px; color: #9CA3AF;")
+            layout.addWidget(note)
+
+        btn_row = QHBoxLayout()
+        btn_cancel = QPushButton("Annuler la réception")
+        btn_cancel.setObjectName("btnSecondary")
+        btn_cancel.clicked.connect(self.reject)
+        btn_ok = QPushButton("Continuer")
+        btn_ok.clicked.connect(self.accept)
+        btn_row.addStretch()
+        btn_row.addWidget(btn_cancel)
+        btn_row.addWidget(btn_ok)
+        layout.addLayout(btn_row)
+
+    def should_apply_expiry(self) -> bool:
+        return bool(self._apply_expiry and self._apply_expiry.isChecked())
 
 
 class _InvoicePaymentDialog(QDialog):
@@ -513,6 +622,18 @@ class InvoiceEntryDialog(QDialog):
             )
             return
 
+        # Vérifications avant de toucher au stock : catégories sensibles,
+        # conservation courte, dates d'expiration. Purement informatif, mais
+        # placé ici pour laisser une chance de refuser la marchandise avant
+        # que la facture et le stock ne soient enregistrés.
+        warnings = StockController.check_reception(items)
+        apply_expiry = False
+        if warnings:
+            warn_dialog = _ReceptionWarningsDialog(warnings, self)
+            if not warn_dialog.exec():
+                return
+            apply_expiry = warn_dialog.should_apply_expiry()
+
         payment_dialog = _InvoicePaymentDialog(total_amount, self)
         if not payment_dialog.exec():
             return
@@ -556,6 +677,21 @@ class InvoiceEntryDialog(QDialog):
             QMessageBox.critical(self, "Erreur", str(exc))
             return
 
+        # Après l'enregistrement : la facture est la source de vérité du stock,
+        # la date d'expiration n'est qu'une information dérivée. Si elle échoue,
+        # la réception reste valide.
+        expiry_updated = 0
+        if apply_expiry:
+            try:
+                expiry_updated = StockController.apply_suggested_expiry(warnings)
+            except Exception as exc:
+                QMessageBox.warning(
+                    self,
+                    "Dates d'expiration",
+                    f"La facture est enregistrée, mais les dates d'expiration n'ont pas pu "
+                    f"être mises à jour :\n{exc}",
+                )
+
         message = (
             f"✅  Facture enregistrée.\n"
             f"Produits mis à jour : {result['item_count']}\n"
@@ -563,6 +699,8 @@ class InvoiceEntryDialog(QDialog):
             f"Payé : {result['amount_paid']:.3f} TND\n"
             f"Crédit : {result['remaining_amount']:.3f} TND"
         )
+        if expiry_updated:
+            message += f"\nDates d'expiration mises à jour : {expiry_updated}"
         QMessageBox.information(self, "Facture enregistrée", message)
         self.accept()
 

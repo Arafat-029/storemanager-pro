@@ -14,21 +14,50 @@ class CategoryController:
         return db.fetchone("SELECT * FROM categories WHERE id=?", (cat_id,))
 
     @staticmethod
+    def _clean_shelf_life(shelf_life_days) -> int | None:
+        """Shelf life is optional; 0 and negatives mean "not set"."""
+        if shelf_life_days in (None, ""):
+            return None
+        try:
+            value = int(shelf_life_days)
+        except (TypeError, ValueError):
+            return None
+        return value if value > 0 else None
+
+    @staticmethod
     def create(name: str, description: str = "", color: str = "#4CAF50",
-               image_path: str = None) -> int:
+               image_path: str = None, is_sensitive: bool = False,
+               shelf_life_days: int | None = None) -> int:
         cur = db.execute(
-            "INSERT INTO categories (name, description, color, image_path) VALUES (?,?,?,?)",
-            (name, description, color, image_path),
+            """
+            INSERT INTO categories (name, description, color, image_path, is_sensitive, shelf_life_days)
+            VALUES (?,?,?,?,?,?)
+            """,
+            (
+                name, description, color, image_path,
+                1 if is_sensitive else 0,
+                CategoryController._clean_shelf_life(shelf_life_days),
+            ),
         )
         AuthController.log("CATEGORY_CREATE", f"Catégorie créée: {name}")
         return cur.lastrowid
 
     @staticmethod
     def update(cat_id: int, name: str, description: str = "", color: str = "#4CAF50",
-               image_path: str = None):
+               image_path: str = None, is_sensitive: bool = False,
+               shelf_life_days: int | None = None):
         db.execute(
-            "UPDATE categories SET name=?, description=?, color=?, image_path=? WHERE id=?",
-            (name, description, color, image_path, cat_id),
+            """
+            UPDATE categories
+            SET name=?, description=?, color=?, image_path=?, is_sensitive=?, shelf_life_days=?
+            WHERE id=?
+            """,
+            (
+                name, description, color, image_path,
+                1 if is_sensitive else 0,
+                CategoryController._clean_shelf_life(shelf_life_days),
+                cat_id,
+            ),
         )
         AuthController.log("CATEGORY_UPDATE", f"Catégorie modifiée: id={cat_id}")
 

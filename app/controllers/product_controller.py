@@ -175,6 +175,7 @@ class ProductController:
                     "sale_price": sale_price,
                     "barcode": barcode,
                     "is_default": bool(raw.get("is_default")),
+                    "unit_kind": str(raw.get("unit_kind") or "").strip() or None,
                 }
             )
 
@@ -186,6 +187,7 @@ class ProductController:
                     "sale_price": round(float(default_sale_price or 0.0), 3),
                     "barcode": None,
                     "is_default": True,
+                    "unit_kind": None,
                 }
             ]
 
@@ -233,14 +235,15 @@ class ProductController:
                 unit.get("barcode"),
                 1 if unit["is_default"] else 0,
                 1,
+                unit.get("unit_kind"),
             )
             for unit in normalized
         ]
         db.executemany(
             """
             INSERT INTO product_sale_units (
-                product_id, name, quantity, sale_price, barcode, is_default, is_active
-            ) VALUES (?,?,?,?,?,?,?)
+                product_id, name, quantity, sale_price, barcode, is_default, is_active, unit_kind
+            ) VALUES (?,?,?,?,?,?,?,?)
             """,
             rows,
         )

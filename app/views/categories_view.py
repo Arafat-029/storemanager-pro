@@ -4,7 +4,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QDialog,
     QFormLayout, QLineEdit, QTextEdit, QLabel, QMessageBox,
-    QColorDialog, QFrame, QFileDialog,
+    QColorDialog, QFrame, QFileDialog, QCheckBox, QSpinBox,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPixmap
@@ -110,6 +110,8 @@ class CategoryDialog(QDialog):
         if cat:
             self._name.setText(cat["name"])
             self._desc.setPlainText(cat.get("description") or "")
+            self._sensitive.setChecked(bool(cat.get("is_sensitive")))
+            self._shelf_life.setValue(int(cat.get("shelf_life_days") or 0))
             self._update_color_btn()
             self._update_image_preview()
 
@@ -161,10 +163,30 @@ class CategoryDialog(QDialog):
         img_row.addLayout(img_btns)
         img_row.addStretch()
 
+        # ── Surveillance à la réception ──────────────────────
+        # Configuré sur la catégorie plutôt que sur chaque produit : une règle
+        # posée une fois couvre tous les produits laitiers, par exemple.
+        self._sensitive = QCheckBox("Produits sensibles (alerte à la réception)")
+        self._sensitive.setToolTip(
+            "Affiche un rappel de vérification lors de l'ajout au stock d'une livraison."
+        )
+
+        self._shelf_life = QSpinBox()
+        self._shelf_life.setRange(0, 3650)
+        self._shelf_life.setSuffix(" jours")
+        self._shelf_life.setSpecialValueText("Non définie")
+        self._shelf_life.setMinimumHeight(38)
+        self._shelf_life.setToolTip(
+            "Durée de conservation après réception. Sert à proposer une date "
+            "d'expiration et à signaler les produits qui se gardent peu."
+        )
+
         form.addRow("Nom *:", self._name)
         form.addRow("Description:", self._desc)
         form.addRow("Couleur:", self._color_btn)
         form.addRow("Image:", img_row)
+        form.addRow("Surveillance:", self._sensitive)
+        form.addRow("Conservation:", self._shelf_life)
         layout.addLayout(form)
 
         btn_row = QHBoxLayout()
@@ -225,16 +247,20 @@ class CategoryDialog(QDialog):
         if not name:
             QMessageBox.warning(self, "Erreur", "Le nom est obligatoire.")
             return
+        is_sensitive = self._sensitive.isChecked()
+        shelf_life_days = self._shelf_life.value() or None
         try:
             if self._cat:
                 CategoryController.update(
                     self._cat["id"], name, self._desc.toPlainText(),
-                    self._color, self._image_path
+                    self._color, self._image_path,
+                    is_sensitive=is_sensitive, shelf_life_days=shelf_life_days,
                 )
             else:
                 CategoryController.create(
                     name, self._desc.toPlainText(),
-                    self._color, self._image_path
+                    self._color, self._image_path,
+                    is_sensitive=is_sensitive, shelf_life_days=shelf_life_days,
                 )
             self.accept()
         except Exception as e:

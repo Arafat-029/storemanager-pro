@@ -1,4 +1,5 @@
 from __future__ import annotations
+import math
 import os
 import shutil
 import time
@@ -25,6 +26,7 @@ from app.utils.qr_utils import generate_qr, generate_barcode_value
 from app.utils.helpers import format_price, format_date
 from app.ui.ui_loader import embed_ui
 from app.views.dialog_theme import apply_light_dialog_theme
+from app.utils.thumbnails import load_thumbnail as _load_thumbnail
 from config import PRODUCT_IMAGES_DIR
 
 
@@ -34,6 +36,11 @@ _PRODUCTS_PER_ROW = 7
 _CARD_MIN_WIDTH = 165
 _CARD_IMAGE_HEIGHT = 158  # the product photo is the card's main subject
 _CARD_BODY_HORIZONTAL_PADDING = 10
+# Card width follows the window width, so thumbnails are requested at a width
+# rounded up to this step instead: the label crops the few extra pixels, and
+# the on-disk thumbnail cache keeps a handful of sizes rather than a new set
+# for every window width the user drags through.
+_THUMB_WIDTH_STEP = 40
 
 _CARD_QSS = (
     "QFrame#productCard {"
@@ -157,10 +164,12 @@ class _ProductCard(QFrame):
 
         img_path = _resolve_product_image_path(p.get("image_path"))
         if img_path:
-            pix = QPixmap(img_path).scaled(
-                self._card_width, self._image_height, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
-            )
-            img_lbl.setPixmap(pix)
+            # Same cached, decode-at-target-size path the Caisse uses: product
+            # photos are full-resolution files and decoding them in full would
+            # cost ~100 ms each, on every visit to this page. The label is a
+            # fixed-size AlignCenter box, so it crops the rounded-up width.
+            thumb_width = math.ceil(self._card_width / _THUMB_WIDTH_STEP) * _THUMB_WIDTH_STEP
+            img_lbl.setPixmap(_load_thumbnail(img_path, thumb_width, self._image_height))
             img_lbl.setStyleSheet(
                 "border-radius: 12px 12px 0 0; background: #F9FAFB;"
             )
@@ -372,6 +381,7 @@ class ProductsView(QWidget):
         self._display(result)
 
     def _display(self, products: list[dict]):
+        previous_rows = self._grid.rowCount()
         while self._grid.count():
             item = self._grid.takeAt(0)
             if w := item.widget():
@@ -381,6 +391,10 @@ class ProductsView(QWidget):
                 # behind the new ones. Hide immediately to avoid that.
                 w.hide()
                 w.deleteLater()
+        # Row stretches survive takeAt(), so a filler row left over from a
+        # previous (taller) result set would keep stretching this one.
+        for row in range(previous_rows + 1):
+            self._grid.setRowStretch(row, 0)
 
         self._count_lbl.setText(f"{len(products)} produit(s)")
 
@@ -391,7 +405,11 @@ class ProductsView(QWidget):
             self._grid.addWidget(lbl, 0, 0, 1, _PRODUCTS_PER_ROW)
             return
 
-        cols = min(_PRODUCTS_PER_ROW, max(1, len(products)))
+        # Always size cards off the standard row width (_PRODUCTS_PER_ROW),
+        # never off how many products actually matched — otherwise a filter
+        # that leaves only 1-2 products stretches those few cards to fill
+        # the whole row instead of keeping the standard card size.
+        cols = _PRODUCTS_PER_ROW
         spacing = self._grid.horizontalSpacing()
         if spacing < 0:
             spacing = self._grid.spacing()
@@ -403,16 +421,24 @@ class ProductsView(QWidget):
 
         self._grid_widget.setMinimumWidth(viewport_width)
 
+        # No column stretch at all: with AlignLeft (set on the grid layout),
+        # cards keep their fixed card_width and leftover space in a partial
+        # row simply stays empty on the right instead of growing the cards.
         for col in range(_PRODUCTS_PER_ROW):
             self._grid.setColumnStretch(col, 0)
-        for col in range(cols):
-            self._grid.setColumnStretch(col, 1)
 
         for i, p in enumerate(products):
             card = _ProductCard(p, card_width=card_width)
             card.edit_requested.connect(self._edit_product)
             card.delete_requested.connect(self._delete_product)
-            self._grid.addWidget(card, i // cols, i % cols)
+            self._grid.addWidget(card, i // cols, i % cols, Qt.AlignTop)
+
+        # The scroll area resizes _grid_widget to fill the viewport, so with
+        # only one or two rows of cards the grid would stretch those rows to
+        # absorb all the leftover height. An empty stretching row after the
+        # last one soaks it up instead, keeping every card at its natural size.
+        last_row = (len(products) - 1) // cols
+        self._grid.setRowStretch(last_row + 1, 1)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -627,8 +653,56 @@ class ProductDialog(QDialog):
 
         row = form_layout.rowCount()
         form_layout.insertRow(row, QLabel("Pack"), container)
+
+        # ── "Vente à la pièce" : l'inverse du pack ────────────
+        # Le pack ajoute une unité optionnelle "N pièces à un prix fixe" ;
+        # ici, c'est l'inverse : le produit se vend normalement par lot de N
+        # (au prix de vente habituel du produit, multiplié par N), et cette
+        # option ajoute le bouton pour casser le lot et vendre 1 pièce au
+        # prix indiqué ici. Un produit n'a jamais les deux à la fois.
+        self._piece_enabled = QCheckBox("Activer vente à la pièce")
+        self._piece_enabled.toggled.connect(self._sync_piece_fields_state)
+
+        self._piece_qty = QDoubleSpinBox()
+        configure_manual_spinbox(self._piece_qty, decimals=0, placeholder="6")
+        self._piece_qty.setSingleStep(1)
+        self._piece_qty.setMinimum(2)
+        self._piece_qty.setMaximum(100000)
+        self._piece_qty.setEnabled(False)
+
+        self._piece_price = QDoubleSpinBox()
+        _bind_product_price_spin(self._piece_price)
+        self._piece_price.setEnabled(False)
+
+        piece_row_fields = QHBoxLayout()
+        piece_row_fields.setContentsMargins(0, 0, 0, 0)
+        piece_row_fields.setSpacing(8)
+        piece_row_fields.addWidget(QLabel("Nb pièces par défaut"))
+        piece_row_fields.addWidget(self._piece_qty)
+        piece_row_fields.addWidget(QLabel("Prix à la pièce"))
+        piece_row_fields.addWidget(self._piece_price, 1)
+
+        piece_container = QWidget()
+        piece_lay = QVBoxLayout(piece_container)
+        piece_lay.setContentsMargins(0, 0, 0, 0)
+        piece_lay.setSpacing(6)
+        piece_lay.addWidget(self._piece_enabled)
+        piece_lay.addLayout(piece_row_fields)
+
+        piece_row = form_layout.rowCount()
+        form_layout.insertRow(piece_row, QLabel("À la pièce"), piece_container)
+
+        # Un produit n'a jamais pack ET à-la-pièce en même temps.
+        self._pack_enabled.toggled.connect(
+            lambda checked: checked and self._piece_enabled.setChecked(False)
+        )
+        self._piece_enabled.toggled.connect(
+            lambda checked: checked and self._pack_enabled.setChecked(False)
+        )
+
         self._sale_units = []
         self._sync_pack_fields_state()
+        self._sync_piece_fields_state()
 
     def _sync_pack_fields_state(self):
         enabled = bool(getattr(self, "_pack_enabled", None) and self._pack_enabled.isChecked())
@@ -644,8 +718,21 @@ class ProductDialog(QDialog):
         if hasattr(self, "_pack_hint_lbl"):
             self._pack_hint_lbl.setVisible(unit_is_piece)
 
+    def _sync_piece_fields_state(self):
+        enabled = bool(getattr(self, "_piece_enabled", None) and self._piece_enabled.isChecked())
+        unit_is_piece = (self._unit_type.currentData() or "piece") == "piece"
+        row_enabled = enabled and unit_is_piece
+
+        for widget in (getattr(self, "_piece_qty", None), getattr(self, "_piece_price", None)):
+            if widget is not None:
+                widget.setEnabled(row_enabled)
+
+        if hasattr(self, "_piece_enabled"):
+            self._piece_enabled.setVisible(unit_is_piece)
+
     def _refresh_sale_units_summary(self):
         self._sync_pack_fields_state()
+        self._sync_piece_fields_state()
 
     def _default_sale_units(self) -> list[dict]:
         units = [
@@ -655,14 +742,13 @@ class ProductDialog(QDialog):
                 "sale_price": _product_price_spin_value(self._sale_price),
                 "barcode": None,
                 "is_default": True,
+                "unit_kind": None,
             }
         ]
 
-        if (
-            hasattr(self, "_pack_enabled")
-            and self._pack_enabled.isChecked()
-            and (self._unit_type.currentData() or "piece") == "piece"
-        ):
+        unit_is_piece = (self._unit_type.currentData() or "piece") == "piece"
+
+        if hasattr(self, "_pack_enabled") and self._pack_enabled.isChecked() and unit_is_piece:
             pack_qty = int(round(float(self._pack_qty.value() or 0)))
             pack_price = _product_price_spin_value(self._pack_price)
             if pack_qty >= 2 and pack_price > 0:
@@ -673,6 +759,32 @@ class ProductDialog(QDialog):
                         "sale_price": pack_price,
                         "barcode": None,
                         "is_default": False,
+                        "unit_kind": "pack",
+                    }
+                )
+
+        if hasattr(self, "_piece_enabled") and self._piece_enabled.isChecked() and unit_is_piece:
+            piece_qty = int(round(float(self._piece_qty.value() or 0)))
+            piece_price = _product_price_spin_value(self._piece_price)
+            if piece_qty >= 2 and piece_price > 0:
+                units.append(
+                    {
+                        "name": "À la pièce",
+                        "quantity": 1.0,
+                        "sale_price": piece_price,
+                        "barcode": None,
+                        "is_default": False,
+                        "unit_kind": "piece_single",
+                    }
+                )
+                units.append(
+                    {
+                        "name": f"Lot de {piece_qty}",
+                        "quantity": float(piece_qty),
+                        "sale_price": round(piece_price * piece_qty, 3),
+                        "barcode": None,
+                        "is_default": False,
+                        "unit_kind": "piece_lot",
                     }
                 )
 
@@ -686,6 +798,14 @@ class ProductDialog(QDialog):
         for unit in units or []:
             if bool(unit.get("is_default")):
                 continue
+            kind = str(unit.get("unit_kind") or "").strip().lower()
+            if kind:
+                if kind == "pack":
+                    pack_unit = unit
+                    break
+                continue
+            # Legacy rows created before unit_kind existed: fall back to the
+            # old heuristic (pack was the only "extra unit" kind back then).
             quantity = float(unit.get("quantity") or 1.0)
             unit_name = str(unit.get("name") or "").strip().casefold()
             if quantity > 1.0 or "pack" in unit_name:
@@ -702,6 +822,30 @@ class ProductDialog(QDialog):
             self._pack_price.setValue(0.0)
         self._sync_pack_fields_state()
 
+    def _load_piece_from_units(self, units: list[dict]):
+        if not hasattr(self, "_piece_enabled"):
+            return
+
+        piece_single_unit = None
+        piece_lot_unit = None
+        for unit in units or []:
+            kind = str(unit.get("unit_kind") or "").strip().lower()
+            if kind == "piece_single":
+                piece_single_unit = unit
+            elif kind == "piece_lot":
+                piece_lot_unit = unit
+
+        has_piece = piece_single_unit is not None
+        self._piece_enabled.setChecked(has_piece)
+        if has_piece:
+            self._piece_price.setValue(float(piece_single_unit.get("sale_price") or 0.0))
+            qty = float((piece_lot_unit or {}).get("quantity") or 2)
+            self._piece_qty.setValue(max(2, int(round(qty))))
+        else:
+            self._piece_qty.setValue(6)
+            self._piece_price.setValue(0.0)
+        self._sync_piece_fields_state()
+
     def _edit_sale_units(self):
         self._sync_pack_fields_state()
 
@@ -715,8 +859,11 @@ class ProductDialog(QDialog):
         self._min_stock.setSingleStep(1 if decimals == 0 else 0.001)
         if len(self._sale_units) == 1:
             self._sale_units[0]["name"] = ProductController._base_sale_unit_name(unit_type)
-        if unit_type != "piece" and hasattr(self, "_pack_enabled"):
-            self._pack_enabled.setChecked(False)
+        if unit_type != "piece":
+            if hasattr(self, "_pack_enabled"):
+                self._pack_enabled.setChecked(False)
+            if hasattr(self, "_piece_enabled"):
+                self._piece_enabled.setChecked(False)
         self._refresh_sale_units_summary()
 
     def _populate(self, p: dict):
@@ -745,6 +892,7 @@ class ProductDialog(QDialog):
         self._stock.setEnabled(False)
         self._sale_units = ProductController.get_sale_units(int(p["id"])) or self._default_sale_units()
         self._load_pack_from_units(self._sale_units)
+        self._load_piece_from_units(self._sale_units)
         self._refresh_sale_units_summary()
         self._update_image_preview()
 
@@ -811,6 +959,16 @@ class ProductDialog(QDialog):
                 return
             if pack_price <= 0:
                 QMessageBox.warning(self, "Erreur", "Le prix pack doit être supérieur à 0.")
+                return
+
+        if hasattr(self, "_piece_enabled") and self._piece_enabled.isChecked():
+            piece_qty = int(round(float(self._piece_qty.value() or 0)))
+            piece_price = _product_price_spin_value(self._piece_price)
+            if piece_qty < 2:
+                QMessageBox.warning(self, "Erreur", "Le lot doit contenir au moins 2 pièces.")
+                return
+            if piece_price <= 0:
+                QMessageBox.warning(self, "Erreur", "Le prix à la pièce doit être supérieur à 0.")
                 return
 
         if len(sale_units) == 1 and not sale_units[0].get("barcode") and self._barcode.text().strip():

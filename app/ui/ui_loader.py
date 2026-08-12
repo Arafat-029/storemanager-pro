@@ -52,6 +52,13 @@ def load_ui(ui_name: str, parent: QWidget | None = None) -> QWidget:
 
     if widget is None:
         raise RuntimeError(f"QUiLoader failed to load: {path}")
+
+    # QUiLoader builds these widgets on the C++ side, so the patched virtuals
+    # in form_behavior never fire for them — attach the event filter instead so
+    # .ui forms get the same "wheel/arrows don't edit fields" behaviour.
+    from app.views.widgets.form_behavior import guard_fields_in
+
+    guard_fields_in(widget)
     return _bind_named_children(widget)
 
 

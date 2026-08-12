@@ -8,10 +8,12 @@ from PySide6.QtCore import Qt
 from app.views.widgets.data_table import DataTable
 from app.views.widgets.search_bar import SearchBar
 from app.views.widgets.price_input import PriceSpinBox
-from app.controllers.stock_controller import StockController
+from app.controllers.stock_controller import StockController, LOSS_REASONS, LOSS_REASON_LABELS
 from app.controllers.product_controller import ProductController
 from app.utils.helpers import format_datetime, format_price
 from app.views.invoice_scan_dialog import InvoiceScanDialog
+
+_UNIT_SUFFIX = {"piece": " pcs", "kg": " kg", "litre": " L"}
 
 _WHITE_QSS = (
     "QDialog, QWidget, QFrame { background: #FFFFFF; color: #111827; }"
@@ -30,6 +32,9 @@ _WHITE_QSS = (
     "QPushButton:pressed { background: #047857; }"
     "QPushButton#btnSecondary, QPushButton[cssClass=\"btnSecondary\"] { background: transparent; border: 1.5px solid #D1D5DB; color: #6B7280; }"
     "QPushButton#btnSecondary:hover, QPushButton[cssClass=\"btnSecondary\"]:hover { border-color: #059669; color: #111827; }"
+    # Destructive action: must not share the green of the confirm buttons.
+    "QPushButton#btnDanger { background: #DC2626; color: #FFFFFF; }"
+    "QPushButton#btnDanger:hover { background: #B91C1C; }"
     "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 0; height: 0; border: 0; }"
     "QComboBox QAbstractItemView { background: #FFFFFF; color: #111827;"
     "  border: 1.5px solid #E5E7EB; }"
@@ -69,7 +74,14 @@ class StockView(QWidget):
         btn_scan.setMinimumHeight(42)
         btn_scan.clicked.connect(self._open_invoice_scan)
 
+        btn_loss = QPushButton("🗑️  Déclarer une perte")
+        btn_loss.setObjectName("btnDanger")
+        btn_loss.setMinimumHeight(42)
+        btn_loss.setToolTip("Retirer du stock un produit cassé, périmé, détruit ou perdu")
+        btn_loss.clicked.connect(self._open_loss)
+
         toolbar.addWidget(self._search, 1)
+        toolbar.addWidget(btn_loss)
         toolbar.addWidget(btn_scan)
         layout.addLayout(toolbar)
 
@@ -96,7 +108,13 @@ class StockView(QWidget):
         for m in movements:
             d = dict(m)
             d["created_at"] = format_datetime(m["created_at"])
-            d["movement_type"] = type_labels.get(m["movement_type"], m["movement_type"])
+            # A loss is stored as an 'out' movement (see StockController); show
+            # it as its own kind so it is not read as a sale.
+            loss_reason = m.get("loss_reason")
+            if loss_reason:
+                d["movement_type"] = f"🗑️ Perte — {LOSS_REASON_LABELS.get(loss_reason, loss_reason)}"
+            else:
+                d["movement_type"] = type_labels.get(m["movement_type"], m["movement_type"])
             d["quantity"] = f"{m['quantity']:.3f}"
             display.append(d)
         self._table.set_data(display, ["created_at", "product_name", "movement_type", "quantity", "reference", "notes", "user_name"])
@@ -141,6 +159,21 @@ class StockView(QWidget):
         dlg = InvoiceScanDialog(self)
         if dlg.exec():
             self.refresh()
+
+    def _open_loss(self):
+        dlg = StockLossDialog(self)
+        if dlg.exec():
+            summary = dlg.result_summary() or {}
+            self.refresh()
+            QMessageBox.information(
+                self,
+                "Perte enregistrée",
+                f"{summary.get('quantity', 0):g} × {summary.get('product_name', '')} "
+                f"retiré(s) du stock.\n"
+                f"Motif : {summary.get('reason_label', '')}\n"
+                f"Coût de la perte : {format_price(summary.get('total_cost', 0))}\n"
+                f"Stock restant : {summary.get('remaining_stock', 0):g}",
+            )
 
 
 class StockAdjustDialog(QDialog):
@@ -259,3 +292,131 @@ class StockEntryDialog(QDialog):
         pid = self._product_combo.currentData()
         StockController.add_stock(pid, self._qty.value(), self._notes.text(), self._ref.text())
         self.accept()
+
+
+class StockLossDialog(QDialog):
+    """Déclare une sortie de stock qui n'est pas une vente.
+
+    Le mouvement est enregistré avec son motif et le prix d'achat du moment,
+    donc il apparaît dans l'historique existant et pèse sur le gain net.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Déclarer une perte")
+        self.setFixedWidth(480)
+        self.setStyleSheet(_WHITE_QSS)
+        self._products = ProductController.get_all()
+        self._result: dict | None = None
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
+
+        title = QLabel("Produit cassé, périmé, détruit ou perdu")
+        title.setStyleSheet("font-size: 15px; font-weight: 700;")
+        layout.addWidget(title)
+
+        form = QFormLayout()
+        form.setSpacing(10)
+
+        self._product_combo = QComboBox()
+        self._product_combo.setMinimumHeight(42)
+        for p in self._products:
+            self._product_combo.addItem(f"{p['name']}", p["id"])
+        self._product_combo.currentIndexChanged.connect(self._update_stock_label)
+
+        self._qty = PriceSpinBox()
+        self._qty.setMinimumHeight(42)
+        self._qty.setMinimum(0.001)
+        self._qty.setMaximum(99999)
+        self._qty.setDecimals(3)
+        self._qty.setValue(1)
+
+        self._reason = QComboBox()
+        self._reason.setMinimumHeight(42)
+        for key, label in LOSS_REASONS:
+            self._reason.addItem(label, key)
+
+        self._notes = QLineEdit()
+        self._notes.setMinimumHeight(42)
+        self._notes.setPlaceholderText("Commentaire (optionnel)")
+
+        self._stock_lbl = QLabel()
+        self._stock_lbl.setStyleSheet("font-size: 12px; color: #6B7280;")
+
+        form.addRow("Produit:", self._product_combo)
+        form.addRow("", self._stock_lbl)
+        form.addRow("Quantité perdue:", self._qty)
+        form.addRow("Motif:", self._reason)
+        form.addRow("Commentaire:", self._notes)
+        layout.addLayout(form)
+
+        btn_row = QHBoxLayout()
+        btn_cancel = QPushButton("Annuler")
+        btn_cancel.setObjectName("btnSecondary")
+        btn_cancel.clicked.connect(self.reject)
+        btn_ok = QPushButton("🗑️  Retirer du stock")
+        btn_ok.setObjectName("btnDanger")
+        btn_ok.clicked.connect(self._confirm)
+        btn_row.addStretch()
+        btn_row.addWidget(btn_cancel)
+        btn_row.addWidget(btn_ok)
+        layout.addLayout(btn_row)
+
+        self._update_stock_label()
+
+    def _current_product(self) -> dict | None:
+        pid = self._product_combo.currentData()
+        return next((p for p in self._products if p["id"] == pid), None)
+
+    def _update_stock_label(self):
+        product = self._current_product()
+        if not product:
+            self._stock_lbl.clear()
+            return
+        unit = _UNIT_SUFFIX.get(product.get("unit_type", "piece"), "")
+        self._stock_lbl.setText(
+            f"Stock actuel : {float(product['stock_quantity']):g}{unit}  •  "
+            f"prix d'achat {float(product.get('purchase_price') or 0):.3f} TND"
+        )
+
+    def _confirm(self):
+        product = self._current_product()
+        if not product:
+            QMessageBox.warning(self, "Erreur", "Sélectionnez un produit.")
+            return
+
+        quantity = self._qty.value()
+        reason_key = self._reason.currentData()
+        reason_label = self._reason.currentText()
+
+        confirm = QMessageBox.question(
+            self,
+            "Confirmer la perte",
+            f"Retirer {quantity:g} × {product['name']} du stock ?\n"
+            f"Motif : {reason_label}\n\n"
+            f"Stock : {float(product['stock_quantity']):g} → "
+            f"{float(product['stock_quantity']) - quantity:g}\n"
+            "Cette sortie sera enregistrée dans l'historique.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        try:
+            self._result = StockController.record_loss(
+                product["id"], quantity, reason_key, self._notes.text().strip()
+            )
+        except ValueError as exc:
+            QMessageBox.warning(self, "Impossible", str(exc))
+            return
+        except Exception as exc:
+            QMessageBox.critical(self, "Erreur", str(exc))
+            return
+
+        self.accept()
+
+    def result_summary(self) -> dict | None:
+        return self._result

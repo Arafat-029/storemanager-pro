@@ -374,19 +374,6 @@ QPushButton#cartRemoveBtn {
 }
 QPushButton#cartRemoveBtn:hover { background: rgba(233, 30, 99, 0.28); }
 
-QLineEdit#cartManualInput {
-    background: #0A1222; border: 1px solid #1A2744; border-radius: 8px;
-    padding: 0 10px; font-size: 12px; font-weight: 600; color: #CBD5E1;
-    min-height: 46px; max-height: 46px;
-}
-QLineEdit#cartManualInput:focus { border-color: #1E88E5; background: #0D1A30; }
-QPushButton#cartAddManualBtn {
-    background: #111B2E; border: 1px solid #1A2744; border-radius: 8px;
-    color: #94A3B8; font-size: 11px; font-weight: 600; padding: 0 10px;
-    min-height: 46px; max-height: 46px;
-}
-QPushButton#cartAddManualBtn:hover { background: #142238; color: #E2E8F0; }
-
 #cartTotalPanel {
     background: #111B2E; border: 1px solid #1A2744; border-radius: 10px; margin: 0;
 }

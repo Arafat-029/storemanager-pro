@@ -753,6 +753,34 @@ class SaleController:
         }
 
     @staticmethod
+    def _loss_totals_by_period(period: str, start_key: str) -> dict[str, float]:
+        """Cost of stock written off in each period.
+
+        Goods lost were paid for but will never be sold, so their purchase cost
+        is a real charge against the result — without this, throwing away a
+        crate of yoghurt would leave the net profit untouched. unit_cost is
+        frozen on the movement, so past periods stay stable when prices change.
+        """
+        period_expr = SaleController._period_expr(period, "sm.created_at")
+        rows = db.fetchall(
+            f"""
+            SELECT
+                {period_expr} AS period_key,
+                COALESCE(SUM(sm.quantity * COALESCE(sm.unit_cost, 0)), 0) AS loss_total
+            FROM stock_movements sm
+            WHERE sm.loss_reason IS NOT NULL
+              AND {db.date_only_expr('sm.created_at')} >= ?
+            GROUP BY period_key
+            ORDER BY period_key
+            """,
+            (start_key,),
+        )
+        return {
+            str(row["period_key"]): round(float(row.get("loss_total") or 0.0), 3)
+            for row in rows
+        }
+
+    @staticmethod
     def get_profit_series(period: str = "day") -> list[dict]:
         period = (period or "day").strip().lower()
 
@@ -769,17 +797,20 @@ class SaleController:
                 for offset in range(month_count)
             ]
             expenses_by_period = _expense_totals_by_period("month", keys)
+            losses_by_period = SaleController._loss_totals_by_period("month", start_key)
             points: list[dict] = []
             for offset, key in enumerate(keys):
                 current_dt = SaleController._shift_months(start_dt, offset)
                 expense_total = expenses_by_period.get(key, 0.0)
-                net_profit = round(gross_by_period.get(key, 0.0) - expense_total, 3)
+                loss_total = losses_by_period.get(key, 0.0)
+                net_profit = round(gross_by_period.get(key, 0.0) - expense_total - loss_total, 3)
                 points.append(
                     {
                         "date": key,
                         "label": current_dt.strftime("%m/%Y"),
                         "profit": net_profit,
                         "expenses": expense_total,
+                        "losses": loss_total,
                     }
                 )
             return points
@@ -792,11 +823,16 @@ class SaleController:
             gross_by_period = SaleController._gross_profit_by_period("year", start_key)
             keys = [str(year) for year in range(start_year, now.year + 1)]
             expenses_by_period = _expense_totals_by_period("year", keys)
+            losses_by_period = SaleController._loss_totals_by_period("year", start_key)
             points: list[dict] = []
             for key in keys:
                 expense_total = expenses_by_period.get(key, 0.0)
-                net_profit = round(gross_by_period.get(key, 0.0) - expense_total, 3)
-                points.append({"date": key, "label": key, "profit": net_profit, "expenses": expense_total})
+                loss_total = losses_by_period.get(key, 0.0)
+                net_profit = round(gross_by_period.get(key, 0.0) - expense_total - loss_total, 3)
+                points.append({
+                    "date": key, "label": key, "profit": net_profit,
+                    "expenses": expense_total, "losses": loss_total,
+                })
             return points
 
         days = 30
@@ -807,17 +843,20 @@ class SaleController:
         day_dates = [(start_dt + timedelta(days=offset)).date() for offset in range(days)]
         keys = [d.isoformat() for d in day_dates]
         expenses_by_period = _expense_totals_by_period("day", keys)
+        losses_by_period = SaleController._loss_totals_by_period("day", start_date)
 
         points: list[dict] = []
         for current_day, key in zip(day_dates, keys):
             expense_total = expenses_by_period.get(key, 0.0)
-            net_profit = round(gross_by_period.get(key, 0.0) - expense_total, 3)
+            loss_total = losses_by_period.get(key, 0.0)
+            net_profit = round(gross_by_period.get(key, 0.0) - expense_total - loss_total, 3)
             points.append(
                 {
                     "date": key,
                     "label": current_day.strftime("%d/%m"),
                     "profit": net_profit,
                     "expenses": expense_total,
+                    "losses": loss_total,
                 }
             )
         return points

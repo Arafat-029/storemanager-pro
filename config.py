@@ -24,6 +24,8 @@ PRODUCT_IMAGES_DIR  = BASE_DIR / "data" / "product_images"
 CATEGORY_IMAGES_DIR = BASE_DIR / "data" / "category_images"
 QR_CODES_DIR = BASE_DIR / "data" / "qrcodes"
 RECEIPTS_DIR = BASE_DIR / "data" / "receipts"
+# Derived thumbnails only — safe to delete, rebuilt on demand.
+THUMBNAIL_CACHE_DIR = BASE_DIR / "data" / "cache" / "thumbnails"
 
 # App info
 APP_NAME = "StoreManager Pro"
@@ -51,5 +53,5 @@ STORE_ADDRESS = "Adresse du magasin"
 STORE_PHONE = "+216 XX XXX XXX"
 
 def ensure_dirs() -> None:
-    for d in [DATABASE_PATH.parent, BACKUP_DIR, PRODUCT_IMAGES_DIR, CATEGORY_IMAGES_DIR, QR_CODES_DIR, RECEIPTS_DIR]:
+    for d in [DATABASE_PATH.parent, BACKUP_DIR, PRODUCT_IMAGES_DIR, CATEGORY_IMAGES_DIR, QR_CODES_DIR, RECEIPTS_DIR, THUMBNAIL_CACHE_DIR]:
         d.mkdir(parents=True, exist_ok=True)

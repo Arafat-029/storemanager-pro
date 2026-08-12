@@ -20,6 +20,7 @@ from app.database.schema import init_schema
 from app.database.connection import db
 from app.views.login_dialog import LoginDialog
 from app.views.main_window import MainWindow
+from app.views.widgets.form_behavior import install_form_field_guard
 
 
 def _load_selected_theme(app: QApplication) -> None:
@@ -46,6 +47,10 @@ def main():
     font = QFont(font_family, 10)
     font.setStyleStrategy(QFont.PreferAntialias)
     app.setFont(font)
+
+    # Uniform form behaviour everywhere (admin and cashier): the wheel never
+    # edits a dropdown/spin box, and arrow keys never change a closed dropdown.
+    install_form_field_guard(app)
 
     try:
         init_schema()

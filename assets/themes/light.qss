@@ -581,32 +581,6 @@ QPushButton#cartRemoveBtn:hover { background: #FECACA; }
     border-top: 1.5px solid #E0E6EF;
 }
 
-/* Secondary action — muted so it never competes with the total or the CTAs. */
-QLineEdit#cartManualInput {
-    background: #FFFFFF;
-    border: 1px solid #E9EDF3;
-    border-radius: 8px;
-    padding: 0 10px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #475569;
-    min-height: 46px;
-    max-height: 46px;
-}
-QLineEdit#cartManualInput:focus { border-color: #2196F3; }
-QPushButton#cartAddManualBtn {
-    background: #F1F5F9;
-    border: 1px solid #E2E8F0;
-    border-radius: 8px;
-    color: #475569;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 0 10px;
-    min-height: 46px;
-    max-height: 46px;
-}
-QPushButton#cartAddManualBtn:hover { background: #E2E8F0; color: #1E293B; }
-
 /* The one summary zone in the POS. */
 #cartTotalPanel {
     background: #FFFFFF;

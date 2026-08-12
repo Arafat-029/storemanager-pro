@@ -30,8 +30,8 @@ from app.views.dialog_theme import (
     light_question,
     light_warning,
 )
+from app.utils.thumbnails import load_thumbnail as _load_thumbnail
 from config import PRODUCT_IMAGES_DIR, CATEGORY_IMAGES_DIR
-import re
 import subprocess, sys, time
 
 # ── Touch-first sizing system ─────────────────────────────────
@@ -57,6 +57,10 @@ _CAT_STRIP_H = _CAT_H + 16  # strip viewport: buttons + padding + h-scrollbar
 _CAT_SELECTED_COLOR = "#059669"  # single accent for the selected category, regardless
                                   # of that category's own icon color (matches the app's
                                   # primary green used for the cart's main CTA)
+
+# Rendered category icons, keyed by (label, color, image_path). Module level so
+# it survives POSView being rebuilt; see POSView._make_cat_icon for the why.
+_CAT_ICON_CACHE: dict[tuple, QIcon] = {}
 
 _CART_PANEL_W = 480  # fixed cart sidebar width; the catalog absorbs the rest
 _CART_HEADER_H = 52
@@ -198,21 +202,6 @@ def _spin_numeric_value(spin: QDoubleSpinBox) -> float:
         return float(spin.value())
 
 
-def _parse_amount_text(raw: str | None) -> float:
-    clean = (raw or "").replace("\xa0", "").replace(" ", "").strip().lower()
-    for suffix in ("tnd", "dt", "t", "kg", "g", "l"):
-        clean = clean.replace(suffix, "")
-    if not clean:
-        return 0.0
-    if re.fullmatch(r"\d+", clean):
-        return round(int(clean) / 1000.0, 3)
-    clean = clean.replace(",", ".")
-    try:
-        return round(float(clean), 3)
-    except ValueError:
-        return 0.0
-
-
 def _parse_payment_amount_text(raw: str | None) -> float:
     clean = (raw or "").replace("\xa0", "").replace(" ", "").strip().lower()
     for suffix in ("tnd", "dt"):
@@ -224,12 +213,6 @@ def _parse_payment_amount_text(raw: str | None) -> float:
         return round(float(clean), 3)
     except ValueError:
         return 0.0
-
-
-def _format_manual_amount_text(amount: float) -> str:
-    if amount <= 0:
-        return ""
-    return f"{amount:.3f}"
 
 
 class MillimeAmountLineEdit(QLineEdit):
@@ -303,28 +286,14 @@ class MillimeAmountLineEdit(QLineEdit):
         event.ignore()
 
 
-class ManualAmountLineEdit(QLineEdit):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setPlaceholderText("Autre 0.000")
-        self.setClearButtonEnabled(True)
-        self.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.setValidator(
-            QRegularExpressionValidator(
-                QRegularExpression(r"\d{0,6}([\.,]\d{0,3})?"),
-                self,
-            )
-        )
-
-
 class POSView(QWidget):
     cash_expected_changed = Signal(str, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._cart: list[dict] = []
-        self._manual_item_seq = 0
         self._active_cat_id: int | None = None
+        self._default_category_applied = False
         self._cat_buttons: list[tuple[QPushButton, int | None]] = []
         self._displayed_products: list[dict] = []
         self._current_grid_columns = _COLS
@@ -549,26 +518,6 @@ class POSView(QWidget):
             "background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 6px 8px;"
         )
 
-        # Secondary action — free-form amount. Kept low-contrast on purpose so it
-        # never competes with the total or the payment buttons.
-        manual_row = QHBoxLayout()
-        manual_row.setSpacing(_GAP)
-
-        self._manual_price_input = ManualAmountLineEdit()
-        self._manual_price_input.setObjectName("cartManualInput")
-        self._manual_price_input.setPlaceholderText("Autre montant…")
-        self._manual_price_input.returnPressed.connect(self._add_manual_price)
-        self._manual_price_input.editingFinished.connect(self._normalize_manual_price_input)
-
-        self._btn_add_manual = QPushButton("Ajouter")
-        self._btn_add_manual.setObjectName("cartAddManualBtn")
-        self._btn_add_manual.setCursor(Qt.PointingHandCursor)
-        self._btn_add_manual.setFixedWidth(104)
-        self._btn_add_manual.clicked.connect(self._add_manual_price)
-
-        manual_row.addWidget(self._manual_price_input, 1)
-        manual_row.addWidget(self._btn_add_manual)
-
         # The single summary zone for the whole POS. Deliberately minimal: no fill,
         # just a hairline frame — only the amount carries visual weight.
         total_panel = QFrame()
@@ -604,7 +553,6 @@ class POSView(QWidget):
         pay_row.addWidget(btn_credit, 1)
 
         self._cash_expected_lbl.hide()
-        bottom_layout.addLayout(manual_row)
         bottom_layout.addWidget(total_panel)
         bottom_layout.addLayout(pay_row)
 
@@ -931,12 +879,6 @@ class POSView(QWidget):
         self.updateGeometry()
         self._schedule_catalog_restore()
 
-    def _normalize_manual_price_input(self):
-        if not hasattr(self, "_manual_price_input"):
-            return
-        amount = _parse_amount_text(self._manual_price_input.text())
-        self._manual_price_input.setText(_format_manual_amount_text(amount))
-
     def _update_cash_expected_label(self):
         if not self._is_cashier_user():
             if hasattr(self, "_cash_expected_lbl"):
@@ -966,6 +908,17 @@ class POSView(QWidget):
                 widget.deleteLater()
 
         self._cat_buttons.clear()
+        categories = CategoryController.get_all()
+
+        if not self._default_category_applied:
+            self._default_category_applied = True
+            default_cat = next(
+                (c for c in categories if (c.get("name") or "").strip().lower() == "autres"),
+                None,
+            )
+            if default_cat is not None:
+                self._active_cat_id = default_cat["id"]
+
         current_selection = self._active_cat_id
         self._add_cat_widget(
             "Tous",
@@ -974,7 +927,7 @@ class POSView(QWidget):
             image_path=None,
             selected=current_selection is None,
         )
-        for cat in CategoryController.get_all():
+        for cat in categories:
             self._add_cat_widget(
                 cat["name"], cat["id"],
                 color=cat.get("color") or "#059669",
@@ -992,20 +945,28 @@ class POSView(QWidget):
         self._schedule_catalog_restore()
 
     def _make_cat_icon(self, label: str, color: str, image_path: str | None) -> QIcon:
-        """Return a QIcon: real image if available, else colored initial placeholder."""
+        """Return a QIcon: real image if available, else colored initial placeholder.
+
+        Cached: _load_categories() runs on every visit to the Caisse, and
+        rebuilding these icons from scratch (disk read + rescale, or QPainter
+        text/emoji rendering) cost ~100 ms each — over a second of latency on
+        every single page change. The cache key carries everything the icon is
+        drawn from, so editing a category still produces a fresh icon.
+        """
+        cache_key = (label, color, image_path)
+        cached = _CAT_ICON_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
+        icon = self._render_cat_icon(label, color, image_path)
+        _CAT_ICON_CACHE[cache_key] = icon
+        return icon
+
+    def _render_cat_icon(self, label: str, color: str, image_path: str | None) -> QIcon:
         if image_path:
             img_file = CATEGORY_IMAGES_DIR / image_path
             if img_file.exists():
-                pix = QPixmap(str(img_file))
-                if not pix.isNull():
-                    pix = pix.scaled(
-                        _CAT_IMG, _CAT_IMG,
-                        Qt.KeepAspectRatioByExpanding,
-                        Qt.SmoothTransformation,
-                    )
-                    x = max(0, (pix.width()  - _CAT_IMG) // 2)
-                    y = max(0, (pix.height() - _CAT_IMG) // 2)
-                    cropped = pix.copy(x, y, _CAT_IMG, _CAT_IMG)
+                cropped = _load_thumbnail(str(img_file), _CAT_IMG, _CAT_IMG)
+                if not cropped.isNull():
 
                     # Round the corners to match the colored-placeholder icons
                     # and the product cards, instead of a harsh square photo.
@@ -1164,8 +1125,6 @@ class POSView(QWidget):
         if focus is None:
             return True
         if focus is self._search_input:
-            return False
-        if focus is getattr(self, "_manual_price_input", None):
             return False
         if isinstance(focus, (QLineEdit, QDoubleSpinBox, QuantitySpinBox, PriceSpinBox)):
             return False
@@ -1355,6 +1314,12 @@ class POSView(QWidget):
             self._sale_units_cache[product_id] = cached
         return cached
 
+    def _sale_unit_of_kind(self, product: dict, kind: str) -> dict | None:
+        for unit in self._sale_units_for_product(int(product["id"])):
+            if str(unit.get("unit_kind") or "").strip().lower() == kind:
+                return unit
+        return None
+
     def _default_sale_unit_for_product(self, product: dict) -> dict | None:
         if product.get("selected_sale_unit_id"):
             return {
@@ -1364,18 +1329,31 @@ class POSView(QWidget):
                 "sale_price": product.get("selected_sale_unit_price", product.get("sale_price", 0.0)),
                 "barcode": product.get("selected_sale_unit_barcode"),
             }
+        # "Vente à la pièce" is the inverse of pack: the normal sale is the
+        # whole lot (this unit), and _piece_single_sale_unit_for_product is
+        # the exception that sells just 1 piece.
+        piece_lot = self._sale_unit_of_kind(product, "piece_lot")
+        if piece_lot:
+            return piece_lot
         units = self._sale_units_for_product(int(product["id"]))
         return units[0] if units else None
 
     def _pack_sale_unit_for_product(self, product: dict) -> dict | None:
+        explicit = self._sale_unit_of_kind(product, "pack")
+        if explicit:
+            return explicit
         for unit in self._sale_units_for_product(int(product["id"])):
-            if bool(unit.get("is_default")):
+            if bool(unit.get("is_default")) or unit.get("unit_kind"):
                 continue
+            # Legacy rows created before unit_kind existed.
             quantity = float(unit.get("quantity") or 1.0)
             unit_name = str(unit.get("name") or "").strip().casefold()
             if quantity > 1.0 or "pack" in unit_name:
                 return unit
         return None
+
+    def _piece_single_sale_unit_for_product(self, product: dict) -> dict | None:
+        return self._sale_unit_of_kind(product, "piece_single")
 
     def _add_pack_to_cart(self, product: dict) -> None:
         pack_unit = self._pack_sale_unit_for_product(product)
@@ -1383,6 +1361,13 @@ class POSView(QWidget):
             self._start_sale_for_product(product)
             return
         self._add_to_cart(product, 1, sale_unit=pack_unit)
+
+    def _add_piece_to_cart(self, product: dict) -> None:
+        piece_unit = self._piece_single_sale_unit_for_product(product)
+        if not piece_unit:
+            self._start_sale_for_product(product)
+            return
+        self._add_to_cart(product, 1, sale_unit=piece_unit)
 
     def _start_sale_for_product(self, product: dict) -> None:
         selected_unit = self._default_sale_unit_for_product(product)
@@ -1494,19 +1479,11 @@ class POSView(QWidget):
             if not p.is_absolute():
                 p = PRODUCT_IMAGES_DIR / raw_path
             if p.exists():
-                pix = QPixmap(str(p))
+                # Pre-render at the card's max width; setScaledContents() then
+                # smoothly downscales this to whatever width the card ends up
+                # at once the responsive grid distributes the row's space.
+                pix = _load_thumbnail(str(p), _CARD_MAX_W, _IMG_H)
                 if not pix.isNull():
-                    # Pre-render at the card's max width; setScaledContents() then
-                    # smoothly downscales this to whatever width the card ends up
-                    # at once the responsive grid distributes the row's space.
-                    pix = pix.scaled(
-                        _CARD_MAX_W, _IMG_H,
-                        Qt.KeepAspectRatioByExpanding,
-                        Qt.SmoothTransformation,
-                    )
-                    x = max(0, (pix.width()  - _CARD_MAX_W) // 2)
-                    y = max(0, (pix.height() - _IMG_H)  // 2)
-                    pix = pix.copy(x, y, _CARD_MAX_W, _IMG_H)
                     img_lbl.setPixmap(pix)
                     img_lbl.setScaledContents(True)
                     img_lbl.setStyleSheet(
@@ -1539,13 +1516,20 @@ class POSView(QWidget):
         layout.addWidget(name_lbl)
 
         # ── Price ────────────────────────────────────────────
-        price_text = format_price(product["sale_price"])
-        if _is_gram_priced_product(product):
-            price_text = f"{price_text} / kg"
-        elif product["unit_type"] == "kg":
-            price_text = f"{price_text} / kg"
-        elif product["unit_type"] == "litre":
-            price_text = f"{price_text} / L"
+        # Always shows what a normal click actually charges: for a "vente à
+        # la pièce" product that's the lot (piece_lot), not products.sale_price.
+        piece_lot_unit = self._sale_unit_of_kind(product, "piece_lot")
+        if piece_lot_unit:
+            lot_qty = int(round(float(piece_lot_unit.get("quantity") or 1.0)))
+            price_text = f"{format_price(float(piece_lot_unit.get('sale_price') or 0.0))} / lot de {lot_qty}"
+        else:
+            price_text = format_price(product["sale_price"])
+            if _is_gram_priced_product(product):
+                price_text = f"{price_text} / kg"
+            elif product["unit_type"] == "kg":
+                price_text = f"{price_text} / kg"
+            elif product["unit_type"] == "litre":
+                price_text = f"{price_text} / L"
 
         price_lbl = QLabel(price_text)
         price_lbl.setAlignment(Qt.AlignCenter)
@@ -1554,27 +1538,39 @@ class POSView(QWidget):
         )
         layout.addWidget(price_lbl)
 
+        # A product only ever has pack OR "à la pièce" configured, never both.
         pack_unit = self._pack_sale_unit_for_product(product)
-        if pack_unit:
+        piece_single_unit = self._piece_single_sale_unit_for_product(product)
+        badge_unit = pack_unit or piece_single_unit
+        if badge_unit:
             # Anchored via a layout (not absolute .move()) so it stays pinned to the
             # top-right corner as the card's width changes with the responsive grid.
             badge_row = QHBoxLayout(img_lbl)
             badge_row.setContentsMargins(0, 6, 6, 0)
             badge_row.addStretch()
 
-            pack_btn = QPushButton("Pack")
-            pack_btn.setCursor(Qt.PointingHandCursor)
-            pack_btn.setFixedSize(44, 20)
-            pack_btn.setToolTip(
-                f"{int(round(float(pack_unit.get('quantity') or 1.0)))} pièce(s) • {format_price(float(pack_unit.get('sale_price') or 0.0))}"
-            )
-            pack_btn.setStyleSheet(
+            if pack_unit:
+                badge_btn = QPushButton("Pack")
+                badge_btn.setToolTip(
+                    f"{int(round(float(pack_unit.get('quantity') or 1.0)))} pièce(s) • "
+                    f"{format_price(float(pack_unit.get('sale_price') or 0.0))}"
+                )
+                badge_btn.clicked.connect(lambda _, p=product: self._add_pack_to_cart(p))
+            else:
+                badge_btn = QPushButton("À la pièce")
+                badge_btn.setToolTip(
+                    f"1 pièce • {format_price(float(piece_single_unit.get('sale_price') or 0.0))}"
+                )
+                badge_btn.clicked.connect(lambda _, p=product: self._add_piece_to_cart(p))
+
+            badge_btn.setCursor(Qt.PointingHandCursor)
+            badge_btn.setFixedSize(60 if not pack_unit else 44, 20)
+            badge_btn.setStyleSheet(
                 "QPushButton { background: rgba(15, 23, 42, 0.90); color: white; border: none;"
                 "border-radius: 10px; font-size: 9px; font-weight: 800; padding: 0 6px; }"
                 "QPushButton:hover { background: rgba(5, 150, 105, 0.95); }"
             )
-            pack_btn.clicked.connect(lambda _, p=product: self._add_pack_to_cart(p))
-            badge_row.addWidget(pack_btn, 0, Qt.AlignTop)
+            badge_row.addWidget(badge_btn, 0, Qt.AlignTop)
 
         def on_click(event, p=product):
             self._start_sale_for_product(p)
@@ -1584,52 +1580,8 @@ class POSView(QWidget):
 
     # ──────────────────────────────── Cart ─────────────────────
 
-    def _next_manual_item_key(self) -> str:
-        self._manual_item_seq += 1
-        return f"manual:{self._manual_item_seq}"
-
-    def _add_manual_price(self):
-        amount = 0.0
-        if hasattr(self, "_manual_price_input"):
-            amount = _parse_amount_text(self._manual_price_input.text())
-
-        if amount <= 0:
-            if hasattr(self, "_manual_price_input"):
-                self._manual_price_input.setFocus()
-                self._manual_price_input.selectAll()
-            return
-
-        try:
-            product_id = ProductController.get_or_create_manual_sale_product_id()
-        except Exception as exc:
-            light_warning(self, "Montant invalide", f"Impossible d'ajouter ce montant : {exc}")
-            return
-
-        self._cart.append(
-            {
-                "cart_key": self._next_manual_item_key(),
-                "product_id": product_id,
-                "name": "Autre prix",
-                "unit_price": amount,
-                "quantity": 1.0,
-                "unit_type": "piece",
-                "discount": 0.0,
-                "stock": 999999.0,
-                "is_manual": True,
-                "skip_stock_movement": True,
-            }
-        )
-
-        if hasattr(self, "_manual_price_input"):
-            self._manual_price_input.clear()
-            self._manual_price_input.setFocus()
-
-        self._render_cart()
-        self._restore_catalog_after_dialog()
-
-
     def _stock_required_for_cart_item(self, item: dict) -> float:
-        if item.get("is_manual") or item.get("skip_stock_movement"):
+        if item.get("skip_stock_movement"):
             return 0.0
         if item.get("pricing_mode") == "gram":
             return round(float(item.get("quantity") or 0.0), 3)
@@ -1786,8 +1738,6 @@ class POSView(QWidget):
 
         for item in self._cart:
             merge_key = item.get("cart_key") or f"product:{item['product_id']}"
-            if item.get("is_manual"):
-                merge_key = item.get("cart_key") or self._next_manual_item_key()
 
             existing = by_key.get(merge_key)
             if existing is None:
@@ -1855,14 +1805,6 @@ class POSView(QWidget):
             btn.clicked.connect(lambda _, i=idx: self._remove_item(i))
             return btn
 
-        if item.get("is_manual"):
-            details_lbl = QLabel("Ligne libre")
-            details_lbl.setObjectName("cartItemDetails")
-            bottom_row.addWidget(details_lbl, 1)
-            bottom_row.addWidget(_make_remove_button(), 0)
-            outer.addLayout(bottom_row)
-            return frame
-
         details_text = _cart_details_text(item)
         details_lbl = QLabel(details_text)
         details_lbl.setObjectName("cartItemDetails")
@@ -1907,9 +1849,6 @@ class POSView(QWidget):
             return
 
         item = self._cart[idx]
-        if item.get("is_manual"):
-            return
-
         new_qty = round(float(item.get("quantity", 0)) + float(delta), 3)
 
         if item.get("pricing_mode") == "gram":
@@ -2383,7 +2322,7 @@ class PaymentDialog(QDialog):
             qty = _cart_quantity_text(line)
             total_line = format_price(line["unit_price"] * line["quantity"])
             label = line["name"]
-            if line.get("sale_unit_name") and not line.get("is_manual"):
+            if line.get("sale_unit_name"):
                 label = f"{label} [{line['sale_unit_name']}]"
             if line.get("pricing_mode") == "gram":
                 text = f"{label} — {qty} × {format_price(line['unit_price'] / 1000)} / g — {total_line}"

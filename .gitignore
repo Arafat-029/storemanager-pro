@@ -18,3 +18,6 @@ __pycache__/
 
 data/store.db
 data/product_images/
+
+# Vignettes régénérées automatiquement à partir des images sources
+data/cache/
