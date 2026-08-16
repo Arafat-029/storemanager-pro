@@ -862,6 +862,26 @@ def _migrate():
     conn.commit()
     _migrate_sales_payment_fields(conn)
 
+    # One-off backfill for deletions made before ProductController.delete()
+    # started clearing the barcode itself: barcode carries a UNIQUE
+    # constraint, so a product deleted under the old code still has its
+    # barcode sitting on a soft-deleted (is_active=0) row, permanently
+    # blocking that code from being reused. Idempotent — once freed there is
+    # nothing left to match. Excludes the internal "__MANUAL_SALE__" product
+    # (get_or_create_manual_sale_product_id): it is deliberately created
+    # inactive and is looked up BY that exact barcode, so clearing it would
+    # make the app spawn a duplicate on every free-form POS line.
+    _execute(
+        conn,
+        "UPDATE products SET barcode=NULL "
+        "WHERE is_active=0 AND barcode IS NOT NULL AND barcode <> '__MANUAL_SALE__'",
+    )
+    _execute(
+        conn,
+        "UPDATE product_sale_units SET barcode=NULL WHERE is_active=0 AND barcode IS NOT NULL",
+    )
+    conn.commit()
+
     # Reception alerts: which categories deserve a warning, and how long their
     # products keep. Held on the category (not the product) so the admin
     # configures a rule once instead of per item.

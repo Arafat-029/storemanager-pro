@@ -33,10 +33,10 @@ for ui_file in sorted(ui_files):
         text=True,
     )
     if result.returncode == 0:
-        print(f"  ✓  {ui_file.name}  →  compiled/{out_file.name}")
+        print(f"  OK  {ui_file.name}  ->  compiled/{out_file.name}")
         ok += 1
     else:
-        print(f"  ✗  {ui_file.name}: {result.stderr.strip()}")
+        print(f"  ERREUR  {ui_file.name}: {result.stderr.strip()}")
         errors += 1
 
 print(f"\n{ok} compiled, {errors} error(s).")

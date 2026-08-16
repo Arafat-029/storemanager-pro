@@ -30,7 +30,7 @@
       <property name="rightMargin"><number>24</number></property>
       <item>
        <widget class="QLabel" name="lblTitleIcon">
-        <property name="text"><string>🛒</string></property>
+        <property name="text"><string></string></property>
         <property name="styleSheet">
          <string>font-size: 24px; color: white; background: transparent;</string>
         </property>
@@ -233,7 +233,13 @@
         <layout class="QHBoxLayout" name="imgRow">
          <item>
           <widget class="QPushButton" name="btnPickImage">
-           <property name="text"><string>📷  Choisir une image</string></property>
+           <property name="text"><string>Choisir une image</string></property>
+           <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnTakePhoto">
+           <property name="text"><string>Prendre une photo</string></property>
            <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
           </widget>
          </item>
@@ -296,7 +302,7 @@
       </item>
       <item>
        <widget class="QPushButton" name="btnSave">
-        <property name="text"><string>💾  Enregistrer</string></property>
+        <property name="text"><string>Enregistrer</string></property>
         <property name="minimumWidth"><number>170</number></property>
        </widget>
       </item>

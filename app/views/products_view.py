@@ -13,12 +13,13 @@ from PySide6.QtWidgets import (
     QHeaderView, QCheckBox,
 )
 from PySide6.QtCore import Qt, QDate, QLocale, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QImage
 
 from app.views.widgets.search_bar import SearchBar
 from app.views.widgets.data_table import DataTable
 from app.views.widgets.price_input import PriceSpinBox
 from app.views.widgets.quantity_input import configure_manual_spinbox
+from app.views.widgets.screen_fit import clamp_min_size
 from app.controllers.product_controller import ProductController
 from app.controllers.category_controller import CategoryController
 from app.controllers.supplier_controller import SupplierController
@@ -27,6 +28,7 @@ from app.utils.helpers import format_price, format_date
 from app.ui.ui_loader import embed_ui
 from app.views.dialog_theme import apply_light_dialog_theme
 from app.utils.thumbnails import load_thumbnail as _load_thumbnail
+from app.utils.camera_capture import PhotoCaptureDialog, CV2_AVAILABLE
 from config import PRODUCT_IMAGES_DIR
 
 
@@ -124,6 +126,14 @@ def _store_product_image(source_path: str) -> str:
     safe_name = f"{source.stem}_{int(time.time() * 1000)}{source.suffix.lower()}"
     destination = PRODUCT_IMAGES_DIR / safe_name
     shutil.copy2(source, destination)
+    return destination.name
+
+
+def _store_captured_product_image(image: QImage) -> str:
+    PRODUCT_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    safe_name = f"photo_{int(time.time() * 1000)}.jpg"
+    destination = PRODUCT_IMAGES_DIR / safe_name
+    image.save(str(destination), "JPG", 90)
     return destination.name
 
 
@@ -228,8 +238,7 @@ class _ProductCard(QFrame):
         unit    = _UNIT_LABELS.get(p.get("unit_type", "piece"), "pcs")
         low     = qty <= min_qty
         s_color = "#EF4444" if low else "#6B7280"
-        s_icon  = "⚠ " if low else ""
-        stock_lbl = QLabel(f"{s_icon}Stock : {qty:.1f} {unit}")
+        stock_lbl = QLabel(f"Stock : {qty:.1f} {unit}")
         stock_lbl.setStyleSheet(f"font-size: 11px; color: {s_color};")
         body.addWidget(stock_lbl)
 
@@ -273,10 +282,16 @@ class _ProductCard(QFrame):
 # Main view
 # ─────────────────────────────────────────────────────────────────────────────
 
+_LIST_PAGE_SIZE = 15
+
+
 class ProductsView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._all_products: list[dict] = []
+        self._filtered_products: list[dict] = []
+        self._view_mode = "grid"
+        self._list_visible_count = _LIST_PAGE_SIZE
         self._build_ui()
         self.refresh()
 
@@ -289,7 +304,7 @@ class ProductsView(QWidget):
         toolbar = QHBoxLayout()
         toolbar.setSpacing(10)
 
-        self._search = SearchBar("🔍  Rechercher un produit...")
+        self._search = SearchBar("Rechercher un produit...")
         self._search.search_changed.connect(self._filter)
         self._search.setMinimumHeight(42)
 
@@ -298,27 +313,40 @@ class ProductsView(QWidget):
         self._cat_filter.setMinimumWidth(200)
         self._cat_filter.currentIndexChanged.connect(self._filter)
 
+        self._view_buttons: dict[str, QPushButton] = {}
+        view_toggle = QHBoxLayout()
+        view_toggle.setSpacing(4)
+        for mode_key, mode_label in (("grid", "Grille"), ("list", "Liste")):
+            btn = QPushButton(mode_label)
+            btn.setCheckable(True)
+            btn.setMinimumHeight(42)
+            btn.setMinimumWidth(64)
+            btn.clicked.connect(lambda checked=False, key=mode_key: self._set_view_mode(key))
+            self._view_buttons[mode_key] = btn
+            view_toggle.addWidget(btn)
+
         btn_add = QPushButton("＋  Nouveau produit")
         btn_add.setMinimumHeight(42)
         btn_add.clicked.connect(self._add_product)
 
-        btn_low = QPushButton("⚠️  Stock faible")
+        btn_low = QPushButton("Stock faible")
         btn_low.setObjectName("btnWarning")
         btn_low.setMinimumHeight(42)
         btn_low.clicked.connect(self._show_low_stock)
 
-        btn_pdf = QPushButton("📋  Importer PDF")
+        btn_pdf = QPushButton("Importer PDF")
         btn_pdf.setObjectName("btnSecondary")
         btn_pdf.setMinimumHeight(42)
         btn_pdf.clicked.connect(self._import_pdf)
 
-        btn_excel = QPushButton("📊  Importer Excel")
+        btn_excel = QPushButton("Importer Excel")
         btn_excel.setObjectName("btnSecondary")
         btn_excel.setMinimumHeight(42)
         btn_excel.clicked.connect(self._import_excel)
 
         toolbar.addWidget(self._search, 2)
         toolbar.addWidget(self._cat_filter)
+        toolbar.addLayout(view_toggle)
         toolbar.addWidget(btn_low)
         toolbar.addWidget(btn_pdf)
         toolbar.addWidget(btn_excel)
@@ -348,12 +376,48 @@ class ProductsView(QWidget):
         self._scroll.setWidget(self._grid_widget)
         layout.addWidget(self._scroll, 1)
 
+        # ── List view (dense table, loaded 15 rows at a time) ───────────────
+        self._list_container = QWidget()
+        list_layout = QVBoxLayout(self._list_container)
+        list_layout.setContentsMargins(0, 0, 0, 0)
+        list_layout.setSpacing(10)
+
+        self._product_table = DataTable(
+            ["Nom", "Catégorie", "Fournisseur", "Prix achat", "Prix vente", "Stock", "Stock min"]
+        )
+        self._product_table.setSortingEnabled(False)  # sorting would fight the incremental loading below
+        self._product_table.itemDoubleClicked.connect(self._edit_selected_row)
+        self._product_table.verticalScrollBar().valueChanged.connect(self._maybe_load_more_rows)
+        list_layout.addWidget(self._product_table, 1)
+
+        list_actions = QHBoxLayout()
+        list_actions.setSpacing(8)
+        self._list_row_count_lbl = QLabel()
+        self._list_row_count_lbl.setStyleSheet("color: #6B7280; font-size: 12px;")
+        btn_list_edit = QPushButton("Modifier")
+        btn_list_edit.setObjectName("btnSecondary")
+        btn_list_edit.setMinimumHeight(38)
+        btn_list_edit.clicked.connect(self._edit_selected_row)
+        btn_list_del = QPushButton("Supprimer")
+        btn_list_del.setObjectName("btnDanger")
+        btn_list_del.setMinimumHeight(38)
+        btn_list_del.clicked.connect(self._delete_selected_row)
+        list_actions.addWidget(self._list_row_count_lbl, 1)
+        list_actions.addWidget(btn_list_edit)
+        list_actions.addWidget(btn_list_del)
+        list_layout.addLayout(list_actions)
+
+        layout.addWidget(self._list_container, 1)
+        self._list_container.hide()
+
+        self._set_view_mode("grid")
+
     # ── Data ──────────────────────────────────────────────────────────────
 
     def refresh(self):
         self._all_products = ProductController.get_all()
         self._load_categories()
-        self._display(self._all_products)
+        self._filter()
 
     def _load_categories(self):
         self._cat_filter.blockSignals(True)
@@ -378,9 +442,104 @@ class ProductsView(QWidget):
                       query in (p.get("barcode") or "").lower()]
         if cat_id:
             result = [p for p in result if p.get("category_id") == cat_id]
-        self._display(result)
+        self._filtered_products = result
+        self._count_lbl.setText(f"{len(result)} produit(s)")
+        self._render_current_view()
 
-    def _display(self, products: list[dict]):
+    # ── View mode (Grille / Liste) ───────────────────────────────────────
+
+    def _set_view_mode(self, mode: str) -> None:
+        mode = mode if mode in ("grid", "list") else "grid"
+        self._view_mode = mode
+        for key, btn in self._view_buttons.items():
+            active = key == mode
+            btn.setChecked(active)
+            if active:
+                btn.setStyleSheet(
+                    "QPushButton { background: #059669; color: white; border: none;"
+                    "  border-radius: 8px; font-weight: 700; }"
+                )
+            else:
+                btn.setStyleSheet(
+                    "QPushButton { background: transparent; color: #6B7280;"
+                    "  border: 1.5px solid #D1D5DB; border-radius: 8px; }"
+                    "QPushButton:hover { border-color: #059669; color: #059669; }"
+                )
+        self._scroll.setVisible(mode == "grid")
+        self._list_container.setVisible(mode == "list")
+        self._render_current_view()
+
+    def _render_current_view(self) -> None:
+        if self._view_mode == "grid":
+            self._display_grid(self._filtered_products)
+        else:
+            self._list_visible_count = min(_LIST_PAGE_SIZE, len(self._filtered_products))
+            self._render_list_rows(reset=True)
+
+    @staticmethod
+    def _format_product_row(p: dict) -> dict:
+        qty = float(p.get("stock_quantity") or 0)
+        min_qty = float(p.get("min_stock") or 5)
+        unit = _UNIT_LABELS.get(p.get("unit_type", "piece"), "pcs")
+        return {
+            **p,
+            "category_name": p.get("category_name") or "—",
+            "supplier_name": p.get("supplier_name") or "—",
+            "_purchase_price": format_price(p.get("purchase_price", 0)),
+            "_sale_price": format_price(p.get("sale_price", 0)),
+            "_stock": f"{qty:.1f} {unit}",
+            "_min_stock": f"{min_qty:.1f} {unit}",
+        }
+
+    def _render_list_rows(self, reset: bool) -> None:
+        keys = ["name", "category_name", "supplier_name", "_purchase_price", "_sale_price", "_stock", "_min_stock"]
+
+        if reset:
+            self._product_table.setRowCount(0)
+
+        start = self._product_table.rowCount()
+        for p in self._filtered_products[start:self._list_visible_count]:
+            row_data = self._format_product_row(p)
+            r = self._product_table.rowCount()
+            self._product_table.insertRow(r)
+            for c, key in enumerate(keys):
+                val = row_data.get(key, "")
+                item = QTableWidgetItem(str(val) if val is not None else "")
+                item.setData(Qt.UserRole, row_data)
+                item.setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+                self._product_table.setItem(r, c, item)
+            self._product_table.setRowHeight(r, 44)
+
+        total = len(self._filtered_products)
+        if total == 0:
+            self._list_row_count_lbl.setText("Aucun produit trouvé")
+        else:
+            self._list_row_count_lbl.setText(
+                f"{min(self._list_visible_count, total)} / {total} produit(s) affiché(s)"
+            )
+
+    def _maybe_load_more_rows(self, _value=None) -> None:
+        if self._view_mode != "list":
+            return
+        if self._list_visible_count >= len(self._filtered_products):
+            return
+        bar = self._product_table.verticalScrollBar()
+        if bar.maximum() <= 0 or bar.value() < bar.maximum() - 4:
+            return
+        self._list_visible_count = min(self._list_visible_count + _LIST_PAGE_SIZE, len(self._filtered_products))
+        self._render_list_rows(reset=False)
+
+    def _edit_selected_row(self, *_args) -> None:
+        row = self._product_table.selected_row_data()
+        if row:
+            self._edit_product(row)
+
+    def _delete_selected_row(self) -> None:
+        row = self._product_table.selected_row_data()
+        if row:
+            self._delete_product(row)
+
+    def _display_grid(self, products: list[dict]):
         previous_rows = self._grid.rowCount()
         while self._grid.count():
             item = self._grid.takeAt(0)
@@ -442,7 +601,11 @@ class ProductsView(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._filter()
+        # Only the grid's card width depends on the available width; the list
+        # view's table columns stretch on their own, and re-filtering there
+        # would also reset the infinite-scroll position on every resize.
+        if self._view_mode == "grid":
+            self._display_grid(self._filtered_products)
 
     # ── Actions ───────────────────────────────────────────────────────────
 
@@ -552,6 +715,15 @@ class ProductDialog(QDialog):
         self._btn_cancel.clicked.connect(self.reject)
         self._btn_save.clicked.connect(self._save)
         self._btn_pick_image.clicked.connect(self._pick_image)
+        if self._btn_take_photo is not None:
+            if CV2_AVAILABLE:
+                self._btn_take_photo.clicked.connect(self._take_photo)
+            else:
+                # No point offering a camera capture button when the optional
+                # opencv dependency isn't installed — "Choisir une image"
+                # still covers picking an existing photo from disk.
+                self._btn_take_photo.setEnabled(False)
+                self._btn_take_photo.setToolTip("Caméra indisponible (opencv-python non installé)")
         self._update_image_preview()
 
         if product:
@@ -603,6 +775,7 @@ class ProductDialog(QDialog):
         self._btn_cancel     = getattr(self._ui, "btnCancel", None) or getattr(self, "btnCancel")
         self._btn_save       = getattr(self._ui, "btnSave", None) or getattr(self, "btnSave")
         self._btn_pick_image = getattr(self._ui, "btnPickImage", None) or getattr(self, "btnPickImage")
+        self._btn_take_photo = getattr(self._ui, "btnTakePhoto", None) or getattr(self, "btnTakePhoto")
 
         _bind_product_price_spin(self._purchase_price)
         _bind_product_price_spin(self._sale_price)
@@ -627,7 +800,7 @@ class ProductDialog(QDialog):
         self._pack_qty.setMaximum(100000)
         self._pack_qty.setEnabled(False)
 
-        self._pack_price = QDoubleSpinBox()
+        self._pack_price = PriceSpinBox()
         _bind_product_price_spin(self._pack_price)
         self._pack_price.setEnabled(False)
 
@@ -670,7 +843,7 @@ class ProductDialog(QDialog):
         self._piece_qty.setMaximum(100000)
         self._piece_qty.setEnabled(False)
 
-        self._piece_price = QDoubleSpinBox()
+        self._piece_price = PriceSpinBox()
         _bind_product_price_spin(self._piece_price)
         self._piece_price.setEnabled(False)
 
@@ -911,6 +1084,19 @@ class ProductDialog(QDialog):
         except Exception as exc:
             QMessageBox.critical(self, "Erreur", f"Impossible d'ajouter l'image : {exc}")
 
+    def _take_photo(self):
+        dlg = PhotoCaptureDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        image = dlg.captured_image()
+        if image is None:
+            return
+        try:
+            self._image_path = _store_captured_product_image(image)
+            self._update_image_preview()
+        except Exception as exc:
+            QMessageBox.critical(self, "Erreur", f"Impossible d'enregistrer la photo : {exc}")
+
     def _update_image_preview(self):
         resolved_path = _resolve_product_image_path(self._image_path)
         if resolved_path:
@@ -922,7 +1108,7 @@ class ProductDialog(QDialog):
                 self._img_lbl.setText("")
                 return
         self._img_lbl.setPixmap(QPixmap())
-        self._img_lbl.setText("📷")
+        self._img_lbl.setText("")
 
     def _save(self):
         name = self._name.text().strip()
@@ -1061,7 +1247,7 @@ class SaleUnitsDialog(QDialog):
         tools = QHBoxLayout()
         btn_add = QPushButton("＋  Ajouter unité")
         btn_add.clicked.connect(self._add_row)
-        btn_del = QPushButton("🗑  Supprimer ligne")
+        btn_del = QPushButton("Supprimer ligne")
         btn_del.setObjectName("btnSecondary")
         btn_del.clicked.connect(self._remove_current_row)
         tools.addWidget(btn_add)
@@ -1073,7 +1259,7 @@ class SaleUnitsDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("✅  Enregistrer")
+        btn_ok = QPushButton("Enregistrer")
         btn_ok.clicked.connect(self._validate)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)
@@ -1251,7 +1437,7 @@ class StockEntryDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("✅  Confirmer")
+        btn_ok = QPushButton("Confirmer")
         btn_ok.setObjectName("btnSuccess")
         btn_ok.clicked.connect(self._confirm)
         btn_row.addStretch()
@@ -1277,7 +1463,7 @@ class LowStockDialog(QDialog):
         super().__init__(parent)
         apply_light_dialog_theme(self)
         self.setWindowTitle("Produits en stock faible")
-        self.setMinimumSize(600, 400)
+        clamp_min_size(self, 600, 400)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(12)

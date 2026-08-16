@@ -62,14 +62,17 @@ class StockController:
     def add_stock(product_id: int, quantity: float, notes: str = "", reference: str = ""):
         if quantity <= 0:
             raise ValueError("La quantité doit être positive.")
-        db.execute(
-            f"UPDATE products SET stock_quantity=stock_quantity+?, updated_at={db.current_timestamp_sql()} WHERE id=?",
-            (quantity, product_id),
-        )
-        db.execute("""
-            INSERT INTO stock_movements (product_id, user_id, movement_type, quantity, reference, notes)
-            VALUES (?,?,?,?,?,?)
-        """, (product_id, AuthController.current_user()["id"], "in", quantity, reference, notes))
+        # The quantity and its movement record must land together, or the
+        # stock history stops explaining the stock figure.
+        with db.transaction():
+            db.execute(
+                f"UPDATE products SET stock_quantity=stock_quantity+?, updated_at={db.current_timestamp_sql()} WHERE id=?",
+                (quantity, product_id),
+            )
+            db.execute("""
+                INSERT INTO stock_movements (product_id, user_id, movement_type, quantity, reference, notes)
+                VALUES (?,?,?,?,?,?)
+            """, (product_id, AuthController.current_user()["id"], "in", quantity, reference, notes))
         AuthController.log("STOCK_IN", f"Entrée stock: produit id={product_id}, qté={quantity}")
 
     # ── Reception checks ──────────────────────────────────────────────────
@@ -129,7 +132,7 @@ class StockController:
                 days_left = (expiry - today).days
                 if days_left < 0:
                     messages.append(
-                        f"⛔ Date d'expiration dépassée depuis {abs(days_left)} jour(s) "
+                        f"Date d'expiration dépassée depuis {abs(days_left)} jour(s) "
                         f"({expiry.strftime('%d/%m/%Y')})."
                     )
                 elif days_left <= EXPIRY_WARNING_DAYS:
@@ -216,8 +219,7 @@ class StockController:
         total_cost = round(unit_cost * quantity, 3)
         label = LOSS_REASON_LABELS[reason]
 
-        conn = db.get_connection()
-        try:
+        with db.transaction():
             db.execute(
                 f"UPDATE products SET stock_quantity=stock_quantity-?, updated_at={db.current_timestamp_sql()} WHERE id=?",
                 (quantity, product_id),
@@ -239,10 +241,6 @@ class StockController:
                     unit_cost,
                 ),
             )
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
 
         AuthController.log(
             "STOCK_LOSS",

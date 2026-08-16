@@ -46,28 +46,28 @@
      <item>
       
       <widget class="QLineEdit" name="searchBar">
-       <property name="placeholderText"><string>🔍  Rechercher un produit…</string></property>
+       <property name="placeholderText"><string>Rechercher un produit…</string></property>
        <property name="minimumHeight"><number>42</number></property>
        <property name="sizePolicy"><sizepolicy hsizetype="Expanding" vsizetype="Fixed" /></property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="btnAdjust">
-       <property name="text"><string>📋  Ajustement stock</string></property>
+       <property name="text"><string>Ajustement stock</string></property>
        <property name="cssClass" stdset="0"><string>btnWarning</string></property>
        <property name="minimumHeight"><number>42</number></property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="btnEntry">
-       <property name="text"><string>📦  Entrée stock</string></property>
+       <property name="text"><string>Entrée stock</string></property>
        <property name="cssClass" stdset="0"><string>btnSuccess</string></property>
        <property name="minimumHeight"><number>42</number></property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="btnScan">
-       <property name="text"><string>📄  Saisie facture</string></property>
+       <property name="text"><string>Saisie facture</string></property>
        <property name="cssClass" stdset="0"><string>btnWarning</string></property>
        <property name="minimumHeight"><number>42</number></property>
       </widget>

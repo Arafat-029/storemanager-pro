@@ -48,7 +48,7 @@ class SalesView(QWidget):
         self._status_filter.addItem("Complétées", "completed")
         self._status_filter.addItem("Annulées", "cancelled")
 
-        btn_filter = QPushButton("🔍  Filtrer")
+        btn_filter = QPushButton("Filtrer")
         btn_filter.setMinimumHeight(40)
         btn_filter.clicked.connect(self.refresh)
 
@@ -57,7 +57,7 @@ class SalesView(QWidget):
         btn_today.setMinimumHeight(40)
         btn_today.clicked.connect(self._filter_today)
 
-        btn_export = QPushButton("📊  Exporter Excel")
+        btn_export = QPushButton("Exporter Excel")
         btn_export.setObjectName("btnSecondary")
         btn_export.setMinimumHeight(40)
         btn_export.clicked.connect(self._export)
@@ -94,15 +94,15 @@ class SalesView(QWidget):
 
         # Action bar
         btn_row = QHBoxLayout()
-        btn_details = QPushButton("👁  Détails")
+        btn_details = QPushButton("Détails")
         btn_details.setObjectName("btnSecondary")
         btn_details.clicked.connect(self._view_sale)
 
-        btn_cancel = QPushButton("❌  Annuler vente")
+        btn_cancel = QPushButton("Annuler vente")
         btn_cancel.setObjectName("btnDanger")
         btn_cancel.clicked.connect(self._cancel_sale)
 
-        btn_reprint = QPushButton("🖨  Réimprimer ticket")
+        btn_reprint = QPushButton("Réimprimer ticket")
         btn_reprint.setObjectName("btnSecondary")
         btn_reprint.clicked.connect(self._reprint)
 

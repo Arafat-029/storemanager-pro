@@ -204,6 +204,38 @@ class SaleController:
         )
 
     @staticmethod
+    def _assert_stock_available(conn, normalized_items: list[dict]) -> None:
+        """Refuse the sale if any line would push a product's stock negative.
+
+        Quantities are summed per product first: the same product can appear
+        on several lines (a pack line plus a loose-piece line, say), and each
+        line taken alone can fit in stock while their total does not.
+        """
+        required: dict[int, float] = {}
+        for item in normalized_items:
+            if item.get("skip_stock_movement") or not item.get("product_id"):
+                continue
+            product_id = int(item["product_id"])
+            required[product_id] = round(
+                required.get(product_id, 0.0) + float(item["stock_quantity"]), 3
+            )
+
+        for product_id, needed in required.items():
+            row = _fetchone(
+                conn,
+                "SELECT name, stock_quantity FROM products WHERE id=?",
+                (product_id,),
+            )
+            if not row:
+                raise ValueError(f"Produit introuvable (id={product_id}).")
+            available = round(float(row.get("stock_quantity") or 0.0), 3)
+            if needed > available + 0.0005:
+                raise ValueError(
+                    f"Stock insuffisant pour « {row['name']} » : "
+                    f"{available:g} disponible(s), {needed:g} demandé(s)."
+                )
+
+    @staticmethod
     def _sync_credit_payment_status(conn, sale_id: int) -> None:
         sale = _fetchone(
             conn,
@@ -301,27 +333,40 @@ class SaleController:
         immediate_paid = min(total, amount_paid if payment_method == "credit" else total)
         change = round(max(0.0, amount_paid - total), 3)
         payment_status = "paid"
-        paid_at_value = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Whether the sale is settled right now. The timestamp itself is left
+        # to the database (see paid_at_sql below) rather than stamped here:
+        # created_at on this same row comes from the DB clock, so writing
+        # paid_at from Python's clock would put two different time sources —
+        # and under MySQL two different time zones — on one row.
+        paid_now = True
         if payment_method == "credit":
             if immediate_paid <= 0:
                 payment_status = "credit"
-                paid_at_value = None
+                paid_now = False
             elif immediate_paid + 0.0005 >= total:
                 payment_status = "paid"
             else:
                 payment_status = "partial"
-                paid_at_value = None
+                paid_now = False
+        paid_at_sql = db.current_timestamp_sql() if paid_now else "NULL"
 
         user_id = AuthController.current_user()["id"]
-        conn = db.get_connection()
-        try:
+
+        with db.transaction() as conn:
+            # Re-read the stock inside the transaction rather than trusting
+            # what the cart cached when the product was added: the cart can
+            # sit open for minutes while a delivery, a loss or another sale
+            # moves the same product. This is the only check that runs on the
+            # data actually being written.
+            SaleController._assert_stock_available(conn, normalized_items)
+
             cur = _execute(
                 conn,
-                """
+                f"""
                 INSERT INTO sales (
                     user_id, customer_id, subtotal, discount, tax, total,
                     payment_method, payment_status, amount_paid, credit_paid, change_given, notes, paid_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,{paid_at_sql})
                 """,
                 (
                     user_id,
@@ -336,7 +381,6 @@ class SaleController:
                     immediate_paid if payment_method == "credit" else total,
                     change,
                     notes or None,
-                    paid_at_value,
                 ),
             )
             sale_id = int(cur.lastrowid)
@@ -397,11 +441,6 @@ class SaleController:
                     notes="Paiement immédiat",
                 )
 
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-
         AuthController.log("SALE_CREATE", f"Vente #{sale_id} | Total: {total:.3f} | Méthode: {payment_method}")
         return SaleController.get_by_id(sale_id)
 
@@ -426,8 +465,7 @@ class SaleController:
             raise ValueError("Aucune facture crédit ouverte pour ce client.")
 
         remaining = min(amount, current_balance)
-        conn = db.get_connection()
-        try:
+        with db.transaction() as conn:
             batch_cur = _execute(
                 conn,
                 """
@@ -488,10 +526,6 @@ class SaleController:
                 f"UPDATE customers SET balance=?, updated_at={db.current_timestamp_sql()} WHERE id=?",
                 (new_balance, int(customer_id)),
             )
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
 
         AuthController.log(
             "CUSTOMER_PAYMENT",
@@ -597,32 +631,41 @@ class SaleController:
         if not sale or sale["status"] != "completed":
             raise ValueError("Vente introuvable ou déjà annulée.")
 
-        db.execute("UPDATE sales SET status='cancelled' WHERE id=?", (sale_id,))
-        db.execute("DELETE FROM sale_payments WHERE sale_id=?", (sale_id,))
+        # Cancelling touches four things that only make sense together:
+        # the sale's status, its payment rows, the customer's credit balance
+        # and the stock put back on the shelf. Done as separate commits, a
+        # failure halfway through left a cancelled sale whose goods were
+        # never returned to stock, or a credit never given back.
+        with db.transaction():
+            db.execute("UPDATE sales SET status='cancelled' WHERE id=?", (sale_id,))
+            db.execute("DELETE FROM sale_payments WHERE sale_id=?", (sale_id,))
 
-        if sale.get("payment_method") == "credit" and sale.get("customer_id"):
-            remaining_due = round(float(sale.get("total") or 0.0) - float(sale.get("credit_paid") or 0.0), 3)
-            if remaining_due > 0:
-                db.execute(
-                    f"""
-                    UPDATE customers
-                    SET balance = CASE
-                        WHEN balance - ? < 0 THEN 0
-                        ELSE balance - ?
-                    END,
-                    updated_at={db.current_timestamp_sql()}
-                    WHERE id=?
-                    """,
-                    (remaining_due, remaining_due, int(sale["customer_id"])),
+            if sale.get("payment_method") == "credit" and sale.get("customer_id"):
+                remaining_due = round(float(sale.get("total") or 0.0) - float(sale.get("credit_paid") or 0.0), 3)
+                if remaining_due > 0:
+                    db.execute(
+                        f"""
+                        UPDATE customers
+                        SET balance = CASE
+                            WHEN balance - ? < 0 THEN 0
+                            ELSE balance - ?
+                        END,
+                        updated_at={db.current_timestamp_sql()}
+                        WHERE id=?
+                        """,
+                        (remaining_due, remaining_due, int(sale["customer_id"])),
+                    )
+
+            for item in sale["items"]:
+                if not item.get("product_id"):
+                    continue
+                ProductController.update_stock(
+                    int(item["product_id"]),
+                    float(item.get("stock_quantity") or item["quantity"]),
+                    "return",
+                    f"Annulation vente #{sale_id}",
                 )
 
-        for item in sale["items"]:
-            ProductController.update_stock(
-                int(item["product_id"]),
-                float(item.get("stock_quantity") or item["quantity"]),
-                "return",
-                f"Annulation vente #{sale_id}",
-            )
         AuthController.log("SALE_CANCEL", f"Vente #{sale_id} annulée. Raison: {reason}")
 
     @staticmethod
@@ -713,9 +756,24 @@ class SaleController:
             return db.mysql_date_format(column, "%m/%Y") if db.is_mysql() else db.sqlite_strftime("%m/%Y", column)
         return db.mysql_date_format(column, "%d/%m") if db.is_mysql() else db.sqlite_strftime("%d/%m", column)
 
+    # sale_payments.payment_method values that represent money moving through
+    # the customer-credit ledger: a deposit taken at the moment of a credit
+    # sale, or a later repayment against an outstanding balance. Everything
+    # else (cash, card, ...) was paid in full on the spot.
+    _CREDIT_PAYMENT_METHODS = ("credit_deposit", "credit_payment")
+
     @staticmethod
-    def _gross_profit_by_period(period: str, start_key: str) -> dict[str, float]:
+    def _gross_profit_by_period(period: str, start_key: str, credit_scope: str = "all") -> dict[str, float]:
+        """credit_scope: "all" (default, everything) | "credit_only" | "non_credit"."""
         period_expr_payments = SaleController._period_expr(period, "sp.created_at")
+
+        method_filter = ""
+        if credit_scope == "credit_only":
+            methods = ",".join(f"'{m}'" for m in SaleController._CREDIT_PAYMENT_METHODS)
+            method_filter = f" AND sp.payment_method IN ({methods})"
+        elif credit_scope == "non_credit":
+            methods = ",".join(f"'{m}'" for m in SaleController._CREDIT_PAYMENT_METHODS)
+            method_filter = f" AND sp.payment_method NOT IN ({methods})"
 
         payment_rows = db.fetchall(
             f"""
@@ -741,7 +799,7 @@ class SaleController:
                 WHERE s.status='completed'
                 GROUP BY s.id, s.total
             ) AS sale_fin ON sale_fin.id = sp.sale_id
-            WHERE {db.date_only_expr('sp.created_at')} >= ?
+            WHERE {db.date_only_expr('sp.created_at')} >= ?{method_filter}
             GROUP BY period_key
             ORDER BY period_key
             """,
@@ -781,8 +839,17 @@ class SaleController:
         }
 
     @staticmethod
-    def get_profit_series(period: str = "day") -> list[dict]:
+    def get_profit_series(period: str = "day", credit_scope: str = "all") -> list[dict]:
+        """credit_scope: "all" (default — every payment, current behaviour) |
+        "credit_only" (only credit deposits/repayments) | "non_credit" (only
+        cash/card sales paid in full on the spot). Expenses and losses are
+        real operating costs regardless of how a sale was paid, so they are
+        always subtracted in full in every scope — only the revenue side of
+        the formula changes."""
         period = (period or "day").strip().lower()
+        credit_scope = (credit_scope or "all").strip().lower()
+        if credit_scope not in {"all", "credit_only", "non_credit"}:
+            credit_scope = "all"
 
         # Every branch below is the same formula, only the bucket size changes:
         #   net = (margin on payments actually received) - (expenses due)
@@ -791,7 +858,7 @@ class SaleController:
             now = datetime.now().replace(day=1)
             start_dt = SaleController._shift_months(now, -(month_count - 1))
             start_key = start_dt.strftime("%Y-%m-%d")
-            gross_by_period = SaleController._gross_profit_by_period("month", start_key)
+            gross_by_period = SaleController._gross_profit_by_period("month", start_key, credit_scope)
             keys = [
                 SaleController._shift_months(start_dt, offset).strftime("%Y-%m")
                 for offset in range(month_count)
@@ -820,7 +887,7 @@ class SaleController:
             now = datetime.now()
             start_year = now.year - (year_count - 1)
             start_key = f"{start_year}-01-01"
-            gross_by_period = SaleController._gross_profit_by_period("year", start_key)
+            gross_by_period = SaleController._gross_profit_by_period("year", start_key, credit_scope)
             keys = [str(year) for year in range(start_year, now.year + 1)]
             expenses_by_period = _expense_totals_by_period("year", keys)
             losses_by_period = SaleController._loss_totals_by_period("year", start_key)
@@ -837,7 +904,7 @@ class SaleController:
 
         days = 30
         start_date = (datetime.now() - timedelta(days=days - 1)).date().isoformat()
-        gross_by_period = SaleController._gross_profit_by_period("day", start_date)
+        gross_by_period = SaleController._gross_profit_by_period("day", start_date, credit_scope)
 
         start_dt = datetime.fromisoformat(start_date)
         day_dates = [(start_dt + timedelta(days=offset)).date() for offset in range(days)]

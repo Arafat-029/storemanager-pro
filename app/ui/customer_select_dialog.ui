@@ -11,7 +11,7 @@
    <property name="spacing"><number>12</number></property>
    <item>
     <widget class="QLabel" name="titleLbl">
-     <property name="text"><string>👤  Choisir le client</string></property>
+     <property name="text"><string>Choisir le client</string></property>
      <property name="styleSheet"><string>font-size: 15px; font-weight: 700;</string></property>
     </widget>
    </item>
@@ -45,7 +45,7 @@
      </item>
      <item>
       <widget class="QPushButton" name="btnOk">
-       <property name="text"><string>✅  Sélectionner</string></property>
+       <property name="text"><string>Sélectionner</string></property>
       </widget>
      </item>
     </layout>

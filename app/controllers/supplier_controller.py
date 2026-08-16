@@ -22,11 +22,6 @@ def _conn_executemany(conn, query: str, params_list: list[tuple]):
     return conn.executemany(translated, params_list)
 
 
-def _conn_begin(conn):
-    if db.is_mysql():
-        conn.begin()
-    else:
-        conn.execute("BEGIN")
 
 
 class SupplierController:
@@ -151,11 +146,7 @@ class SupplierController:
         invoice_reference = reference or None
         stock_notes = notes or f"Facture fournisseur : {supplier['name']}"
 
-        conn = db.get_connection()
-
-        try:
-            _conn_begin(conn)
-
+        with db.transaction() as conn:
             cur = _conn_execute(conn,
                 """
                 INSERT INTO supplier_invoices (supplier_id, reference, amount_total, amount_paid, notes)
@@ -230,11 +221,6 @@ class SupplierController:
                     ,
                     (product_id, user_id, "in", quantity, invoice_reference, stock_notes),
                 )
-
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
 
         AuthController.log("SUPPLIER_INVOICE_CREATE", f"Facture fournisseur créée: id={invoice_id}")
         if amount_paid > 0:

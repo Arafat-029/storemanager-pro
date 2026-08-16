@@ -6,6 +6,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QImage, QPixmap
 
+from app.views.widgets.screen_fit import clamp_min_size
+
 try:
     import cv2
     import numpy as np
@@ -155,7 +157,7 @@ class BarcodeScannerDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Scanner code-barres / QR")
-        self.setMinimumSize(640, 580)
+        clamp_min_size(self, 640, 580)
         self.setModal(True)
 
         self._cap = None
@@ -185,7 +187,7 @@ class BarcodeScannerDialog(QDialog):
         hdr.setFixedHeight(52)
         hl = QHBoxLayout(hdr)
         hl.setContentsMargins(20, 0, 20, 0)
-        title = QLabel("📷  Scanner code-barres / QR code")
+        title = QLabel("Scanner code-barres / QR code")
         title.setStyleSheet(
             "font-size: 15px; font-weight: 700; color: white; background: transparent; border: none;"
         )
@@ -210,10 +212,10 @@ class BarcodeScannerDialog(QDialog):
         status_frame.setFixedHeight(36)
         sl = QHBoxLayout(status_frame)
         sl.setContentsMargins(16, 0, 16, 0)
-        self._status = QLabel("⏳  Initialisation…")
+        self._status = QLabel("Initialisation…")
         self._status.setStyleSheet("color: #6B7280; font-size: 12px; background: transparent; border: none;")
 
-        lib_txt = "✓ pyzbar" if _PYZBAR_OK else ("✓ cv2.barcode" if _HAS_BARCODE else "⚠ installer opencv-contrib-python")
+        lib_txt = "pyzbar" if _PYZBAR_OK else ("cv2.barcode" if _HAS_BARCODE else "installer opencv-contrib-python")
         lib_color = "#059669" if (_PYZBAR_OK or _HAS_BARCODE) else "#D97706"
         lib_lbl = QLabel(lib_txt)
         lib_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -238,14 +240,14 @@ class BarcodeScannerDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
 
-        self._btn_pc = QPushButton("💻  Webcam PC")
+        self._btn_pc = QPushButton("Webcam PC")
         self._btn_pc.setMinimumHeight(36)
         self._btn_pc.setCheckable(True)
         self._btn_pc.setChecked(True)
         self._btn_pc.setStyleSheet(self._tab_style(True))
         self._btn_pc.clicked.connect(self._use_pc_camera)
 
-        self._btn_phone = QPushButton("📱  Smartphone (WiFi)")
+        self._btn_phone = QPushButton("Smartphone (WiFi)")
         self._btn_phone.setMinimumHeight(36)
         self._btn_phone.setCheckable(True)
         self._btn_phone.setStyleSheet(self._tab_style(False))
@@ -294,12 +296,12 @@ class BarcodeScannerDialog(QDialog):
         inst_layout.setContentsMargins(16, 10, 16, 10)
         inst_layout.setSpacing(4)
         inst_lbl = QLabel(
-            "📱  Configuration smartphone Android :\n"
+            "Configuration smartphone Android :\n"
             "1. Installez l'app  IP Webcam  (Play Store, gratuite)\n"
             "2. Lancez l'app → appuyez sur  Démarrer le serveur\n"
             "3. Notez l'URL affichée (ex: http://192.168.1.100:8080)\n"
             "4. Saisissez cette URL ci-dessus et cliquez  Connecter\n\n"
-            "📱  iPhone : utilisez  EpocCam  ou  DroidCam  (App Store)"
+            "iPhone : utilisez  EpocCam  ou  DroidCam  (App Store)"
         )
         inst_lbl.setStyleSheet("font-size: 12px; color: #1E40AF; background: transparent; border: none;")
         inst_lbl.setWordWrap(True)
@@ -385,17 +387,17 @@ class BarcodeScannerDialog(QDialog):
         self._camera_label.setText(
             "Entrez l'URL de votre smartphone ci-dessous\npuis cliquez sur  Connecter"
         )
-        self._status.setText("📱  En attente de connexion smartphone…")
+        self._status.setText("En attente de connexion smartphone…")
 
     def _connect_phone(self):
         url = self._url_input.text().strip()
         if not url:
-            self._status.setText("⚠  Entrez l'URL de l'app IP Webcam")
+            self._status.setText("Entrez l'URL de l'app IP Webcam")
             return
         # Accept base URL (add /video) or full URL
         if not url.endswith("/video") and not url.endswith("/shot.jpg"):
             url = url.rstrip("/") + "/video"
-        self._status.setText(f"⏳  Connexion à {url}…")
+        self._status.setText(f"Connexion à {url}…")
         self._start_camera(source=url)
 
     def _start_camera(self, source):
@@ -426,11 +428,11 @@ class BarcodeScannerDialog(QDialog):
                 "Caméra non disponible.\n\n"
                 "Vérifiez la connexion ou utilisez la saisie manuelle."
             )
-            self._status.setText("⚠  Caméra non disponible")
+            self._status.setText("Caméra non disponible")
             return
 
         self._timer.start(40)  # 25 fps
-        self._status.setText("🔍  Pointez un code-barres dans le cadre…")
+        self._status.setText("Pointez un code-barres dans le cadre…")
         self._status.setStyleSheet(
             "color: #059669; font-size: 12px; background: transparent; border: none;"
         )
@@ -449,14 +451,14 @@ class BarcodeScannerDialog(QDialog):
         if results:
             text, pts = results[0]
             _draw_overlay(frame, pts, text)
-            self._status.setText(f"✅  Détecté : {text}")
+            self._status.setText(f"Détecté : {text}")
             self._display_frame(frame)
             QTimer.singleShot(400, lambda: self._finish(text))
             return
 
         if self._frame_count % 15 == 0:
             dots = "." * ((self._frame_count // 15) % 4)
-            self._status.setText(f"🔍  Scan en cours{dots}")
+            self._status.setText(f"Scan en cours{dots}")
 
         self._display_frame(frame)
 
@@ -473,7 +475,7 @@ class BarcodeScannerDialog(QDialog):
 
     def _show_fallback(self, message: str):
         self._camera_label.setText(message)
-        self._status.setText("⚠  Saisie manuelle uniquement")
+        self._status.setText("Saisie manuelle uniquement")
 
     def _manual_confirm(self):
         code = self._manual_input.text().strip()

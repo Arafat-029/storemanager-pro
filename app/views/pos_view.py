@@ -21,6 +21,7 @@ from app.utils.helpers import format_price
 from app.utils.exporter import generate_thermal_receipt
 from app.views.widgets.price_input import PriceSpinBox
 from app.views.widgets.quantity_input import QuantitySpinBox
+from app.views.widgets.screen_fit import clamp_min_size
 from app.utils.barcode_scanner import BarcodeScannerDialog, SCANNER_AVAILABLE
 from app.views.dialog_theme import (
     apply_dialog_theme,
@@ -70,31 +71,6 @@ _CART_ROW_ITEM_EXTRA = 0
 _CART_LIST_SPACING = 8
 _CART_VISIBLE_ROWS = 4
 _CART_SCROLL_MIN_ROWS = 4
-
-_CAT_EMOJI: dict[str, str] = {
-    "tous":     "🏪",
-    "boisson":  "🥤",
-    "lait":     "🥛",
-    "yaourt":   "🥛",
-    "boulang":  "🍞",
-    "pâtiss":   "🥐",
-    "fruit":    "🍎",
-    "légume":   "🥦",
-    "épicerie": "🛒",
-    "viande":   "🥩",
-    "poisson":  "🐟",
-    "fromage":  "🧀",
-    "surgelé":  "🧊",
-    "hygièn":   "🧴",
-    "nettoy":   "🧹",
-    "confis":   "🍬",
-    "chocol":   "🍫",
-    "café":     "☕",
-    "thé":      "🍵",
-    "autre":    "📦",
-    "divers":   "📦",
-}
-
 
 def _format_quantity(value: float, unit_type: str) -> str:
     if unit_type == "piece" and abs(value - round(value)) < 0.001:
@@ -349,7 +325,7 @@ class POSView(QWidget):
         search_row = QHBoxLayout()
         search_row.setSpacing(_GAP)
         self._search_input = QLineEdit()
-        self._search_input.setPlaceholderText("🔍  Nom ou code-barres…")
+        self._search_input.setPlaceholderText("Nom ou code-barres…")
         self._search_input.setObjectName("searchBar")
         self._search_input.returnPressed.connect(self._on_scan)
         self._search_input.textChanged.connect(self._on_search_changed)
@@ -537,12 +513,12 @@ class POSView(QWidget):
 
         # Both payment methods are primary actions: same row, same width, same
         # height, same radius — only the hue separates them.
-        btn_cash = QPushButton("💵   Payer en espèces")
+        btn_cash = QPushButton("Payer en espèces")
         btn_cash.setObjectName("cartPayCashBtn")
         btn_cash.setCursor(Qt.PointingHandCursor)
         btn_cash.clicked.connect(lambda: self._checkout("cash"))
 
-        btn_credit = QPushButton("👤   Crédit client")
+        btn_credit = QPushButton("Crédit client")
         btn_credit.setObjectName("cartPayCreditBtn")
         btn_credit.setCursor(Qt.PointingHandCursor)
         btn_credit.clicked.connect(lambda: self._checkout("credit"))
@@ -992,22 +968,12 @@ class POSView(QWidget):
         painter.setPen(QColor(color))
         painter.drawRoundedRect(0, 0, _CAT_IMG, _CAT_IMG, 12, 12)
 
-        # Emoji lookup — fall back to colored initial letter
-        name_lc = label.lower()
-        emoji = next((em for key, em in _CAT_EMOJI.items() if key in name_lc), None)
-
         font = QFont()
-        if emoji:
-            font.setPixelSize(24)
-            painter.setFont(font)
-            painter.setPen(QColor("#333333"))
-            painter.drawText(pix.rect(), Qt.AlignCenter, emoji)
-        else:
-            font.setPixelSize(22)
-            font.setBold(True)
-            painter.setFont(font)
-            painter.setPen(QColor(color))
-            painter.drawText(pix.rect(), Qt.AlignCenter, label[0].upper() if label else "?")
+        font.setPixelSize(22)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor(color))
+        painter.drawText(pix.rect(), Qt.AlignCenter, label[0].upper() if label else "?")
 
         painter.end()
         return QIcon(pix)
@@ -1987,20 +1953,37 @@ class POSView(QWidget):
         settings = {r["key"]: r["value"]
                     for r in db.fetchall("SELECT `key` AS `key`, value FROM settings")}
 
+        # ── 1. La vente elle-même ────────────────────────────────
+        # Seul l'échec de cette étape signifie "vente non enregistrée".
         try:
             sale = SaleController.create_sale(
                 items, payment_method, discount, 0, amount_paid,
                 customer_id=customer_id,
             )
-            self._cart.clear()
-            self.refresh()
+        except Exception as exc:
+            light_critical(
+                self,
+                "Vente non enregistrée",
+                f"{exc}\n\nLe panier est conservé, vous pouvez réessayer.",
+            )
             self._restore_catalog_after_dialog()
             QTimer.singleShot(0, self._restore_catalog_after_dialog)
+            return
 
+        # ── 2. À partir d'ici, la vente EST enregistrée ──────────
+        # Tout ce qui suit n'est que de l'affichage et de l'impression. Une
+        # erreur ici ne doit jamais s'annoncer comme un échec de vente : le
+        # caissier refarait le ticket, et le client serait débité deux fois.
+        try:
+            self._cart.clear()
+            self.refresh()
             refresh_pages = getattr(self.window(), "refresh_pages", None)
             if callable(refresh_pages):
                 refresh_pages({"dashboard", "products", "stock", "sales", "customers"}, include_current=False)
+        except Exception:
+            pass  # rafraîchissement d'écran : sans effet sur la vente
 
+        try:
             if payment_method == "credit":
                 credit_amount = round(max(0.0, total - amount_paid), 3)
                 if credit_amount > 0 and amount_paid > 0:
@@ -2014,23 +1997,45 @@ class POSView(QWidget):
                 else:
                     msg = f"Facture réglée complètement pour {customer['name']}."
                 light_information(self, "Vente crédit", msg)
-            else:
-                if dlg is not None and dlg.should_print_receipt():
-                    pdf_path = generate_thermal_receipt(sale, settings)
-                    try:
-                        if sys.platform == "linux":
-                            subprocess.Popen(["xdg-open", pdf_path])
-                        elif sys.platform == "darwin":
-                            subprocess.Popen(["open", pdf_path])
-                        else:
-                            subprocess.Popen(["start", pdf_path], shell=True)
-                    except Exception:
-                        light_information(self, "Ticket", f"Ticket sauvegardé :\n{pdf_path}")
-        except Exception as e:
-            light_critical(self, "Erreur", str(e))
+            elif dlg is not None and dlg.should_print_receipt():
+                self._print_receipt_safely(sale, settings)
         finally:
             self._restore_catalog_after_dialog()
             QTimer.singleShot(0, self._restore_catalog_after_dialog)
+
+    def _print_receipt_safely(self, sale: dict, settings: dict) -> None:
+        """Imprime le ticket sans jamais remettre la vente en cause.
+
+        La vente est déjà validée quand on arrive ici. Chaque message
+        rappelle donc explicitement qu'elle est enregistrée, pour qu'un
+        problème d'imprimante ne pousse jamais à refaire l'encaissement.
+        """
+        sale_id = sale.get("id")
+        try:
+            pdf_path = generate_thermal_receipt(sale, settings)
+        except Exception as exc:
+            light_warning(
+                self,
+                "Ticket non généré",
+                f"La vente #{sale_id} est bien enregistrée — ne la refaites pas.\n\n"
+                f"Seul le ticket n'a pas pu être créé : {exc}\n\n"
+                "Vous pouvez le réimprimer depuis l'historique des ventes.",
+            )
+            return
+
+        try:
+            if sys.platform == "linux":
+                subprocess.Popen(["xdg-open", pdf_path])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", pdf_path])
+            else:
+                subprocess.Popen(["start", pdf_path], shell=True)
+        except Exception:
+            light_information(
+                self,
+                "Ticket",
+                f"La vente #{sale_id} est enregistrée.\nTicket sauvegardé :\n{pdf_path}",
+            )
 
 
 # ─────────────────────────────────────────────────── Dialogs ──
@@ -2071,7 +2076,7 @@ class GramWeightDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("✅  Ajouter")
+        btn_ok = QPushButton("Ajouter")
         btn_ok.clicked.connect(self.accept)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)
@@ -2149,7 +2154,7 @@ class WeightDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("✅  Ajouter")
+        btn_ok = QPushButton("Ajouter")
         btn_ok.clicked.connect(self.accept)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)
@@ -2234,7 +2239,7 @@ class SaleUnitDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("✅  Ajouter")
+        btn_ok = QPushButton("Ajouter")
         btn_ok.clicked.connect(self._validate)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)
@@ -2472,7 +2477,7 @@ class CreditCheckoutDialog(QDialog):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(14)
 
-        title = QLabel("💳  Vente client avec crédit")
+        title = QLabel("Vente client avec crédit")
         title.setStyleSheet("font-size: 16px; font-weight: 800; color: #111827;")
         layout.addWidget(title)
 
@@ -2612,7 +2617,7 @@ class ManualPriceDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("✅  Ajouter")
+        btn_ok = QPushButton("Ajouter")
         btn_ok.clicked.connect(self._validate)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)
@@ -2638,7 +2643,7 @@ class CustomerSelectDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Sélectionner un client")
-        self.setMinimumSize(460, 400)
+        clamp_min_size(self, 460, 400)
         self._selected_id = None
         self._build_ui()
         self._refresh()
@@ -2648,7 +2653,7 @@ class CustomerSelectDialog(QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(12)
 
-        title = QLabel("👤  Choisir le client")
+        title = QLabel("Choisir le client")
         title.setStyleSheet("font-size: 14px; font-weight: 700;")
         layout.addWidget(title)
 
@@ -2675,7 +2680,7 @@ class CustomerSelectDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("✅  Sélectionner")
+        btn_ok = QPushButton("Sélectionner")
         btn_ok.clicked.connect(self._accept_selection)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)

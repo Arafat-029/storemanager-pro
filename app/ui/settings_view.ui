@@ -21,7 +21,7 @@
        
        <item>
         <widget class="QGroupBox" name="storeGroup">
-         <property name="title"><string>🏪  Informations du magasin</string></property>
+         <property name="title"><string>Informations du magasin</string></property>
          <layout class="QVBoxLayout" name="storeGroupLayout">
           <property name="spacing"><number>12</number></property>
           <item>
@@ -69,7 +69,7 @@
           </item>
           <item>
            <widget class="QPushButton" name="btnSaveStore">
-            <property name="text"><string>💾  Sauvegarder</string></property>
+            <property name="text"><string>Sauvegarder</string></property>
            </widget>
           </item>
          </layout>
@@ -79,12 +79,12 @@
        
        <item>
         <widget class="QGroupBox" name="backupGroup">
-         <property name="title"><string>💾  Sauvegardes</string></property>
+         <property name="title"><string>Sauvegardes</string></property>
          <layout class="QVBoxLayout" name="backupGroupLayout">
           <property name="spacing"><number>12</number></property>
           <item>
            <widget class="QPushButton" name="btnBackup">
-            <property name="text"><string>📥  Créer une sauvegarde maintenant</string></property>
+            <property name="text"><string>Créer une sauvegarde maintenant</string></property>
             <property name="cssClass" stdset="0"><string>btnSuccess</string></property>
            </widget>
           </item>

@@ -14,7 +14,7 @@
 
      
      <widget class="QWidget" name="usersTab">
-      <attribute name="title"><string>👤  Utilisateurs</string></attribute>
+      <attribute name="title"><string>Utilisateurs</string></attribute>
       <layout class="QVBoxLayout" name="usersLayout">
        <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>16</number></property>
        <property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
@@ -49,13 +49,13 @@
          <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
          <item>
           <widget class="QPushButton" name="btnEdit">
-           <property name="text"><string>✏️  Modifier</string></property>
+           <property name="text"><string>Modifier</string></property>
            <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
           </widget>
          </item>
          <item>
           <widget class="QPushButton" name="btnDeactivate">
-           <property name="text"><string>🗑️  Désactiver</string></property>
+           <property name="text"><string>Désactiver</string></property>
            <property name="cssClass" stdset="0"><string>btnDanger</string></property>
           </widget>
          </item>
@@ -66,13 +66,13 @@
 
      
      <widget class="QWidget" name="logsTab">
-      <attribute name="title"><string>📋  Journal des actions</string></attribute>
+      <attribute name="title"><string>Journal des actions</string></attribute>
       <layout class="QVBoxLayout" name="logsLayout">
        <property name="leftMargin"><number>0</number></property><property name="topMargin"><number>16</number></property>
        <property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property>
        <item>
         <widget class="QPushButton" name="btnRefreshLogs">
-         <property name="text"><string>↻  Actualiser</string></property>
+         <property name="text"><string>Actualiser</string></property>
          <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
         </widget>
        </item>

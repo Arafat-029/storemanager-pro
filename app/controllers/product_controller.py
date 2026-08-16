@@ -473,24 +473,43 @@ class ProductController:
 
     @staticmethod
     def delete(product_id: int):
-        db.execute("UPDATE products SET is_active=0 WHERE id=?", (product_id,))
-        db.execute("UPDATE product_sale_units SET is_active=0 WHERE product_id=?", (product_id,))
-        AuthController.log("PRODUCT_DELETE", f"Produit supprimé: id={product_id}")
+        # barcode carries a UNIQUE constraint, and delete is a soft-delete
+        # (is_active=0, row kept for history) — left untouched, that constraint
+        # would keep the barcode locked to the dead product forever, even
+        # though nothing on screen still shows it as taken. Clearing it here
+        # (NULL is never "equal" to another NULL under UNIQUE) frees the code
+        # for a new product the moment this one is actually deleted, while a
+        # merely-deactivated-but-not-deleted product never reaches this path.
+        product = ProductController.get_by_id(product_id)
+        freed_barcode = (product or {}).get("barcode")
+
+        db.execute("UPDATE products SET is_active=0, barcode=NULL WHERE id=?", (product_id,))
+        db.execute("UPDATE product_sale_units SET is_active=0, barcode=NULL WHERE product_id=?", (product_id,))
+
+        message = f"Produit supprimé: id={product_id}"
+        if freed_barcode:
+            message += f", code-barres libéré: {freed_barcode}"
+        AuthController.log("PRODUCT_DELETE", message)
 
     @staticmethod
     def update_stock(product_id: int, quantity_delta: float, movement_type: str, notes: str = ""):
-        db.execute(
-            f"UPDATE products SET stock_quantity=stock_quantity+?, updated_at={db.current_timestamp_sql()} WHERE id=?",
-            (quantity_delta, product_id),
-        )
-        user_id = AuthController.current_user()["id"]
-        db.execute(
-            """
-            INSERT INTO stock_movements (product_id, user_id, movement_type, quantity, notes)
-            VALUES (?,?,?,?,?)
-            """,
-            (product_id, user_id, movement_type, abs(quantity_delta), notes),
-        )
+        # Called both on its own and from inside a larger operation (a sale,
+        # a cancellation). transaction() nests, so it commits the pair here
+        # when standalone and joins the caller's unit of work otherwise —
+        # the stock figure and the movement explaining it never split up.
+        with db.transaction():
+            db.execute(
+                f"UPDATE products SET stock_quantity=stock_quantity+?, updated_at={db.current_timestamp_sql()} WHERE id=?",
+                (quantity_delta, product_id),
+            )
+            user_id = AuthController.current_user()["id"]
+            db.execute(
+                """
+                INSERT INTO stock_movements (product_id, user_id, movement_type, quantity, notes)
+                VALUES (?,?,?,?,?)
+                """,
+                (product_id, user_id, movement_type, abs(quantity_delta), notes),
+            )
 
     @staticmethod
     def get_low_stock() -> list[dict]:

@@ -78,7 +78,7 @@ class ExpensesView(QWidget):
         self._date_to.setCalendarPopup(True)
         self._date_to.setDate(QDate.currentDate())
         self._date_to.setMinimumHeight(40)
-        btn_filter = QPushButton("🔍  Filtrer")
+        btn_filter = QPushButton("Filtrer")
         btn_filter.setMinimumHeight(40)
         btn_filter.clicked.connect(self.refresh)
         btn_add = QPushButton("＋  Nouvelle dépense")
@@ -116,7 +116,7 @@ class ExpensesView(QWidget):
 
         if AuthController.is_admin():
             btn_row = QHBoxLayout()
-            btn_del = QPushButton("🗑️  Supprimer")
+            btn_del = QPushButton("Supprimer")
             btn_del.setObjectName("btnDanger")
             btn_del.clicked.connect(self._delete)
             btn_row.addStretch()
@@ -227,7 +227,7 @@ class ExpenseDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_save = QPushButton("💾  Enregistrer")
+        btn_save = QPushButton("Enregistrer")
         btn_save.clicked.connect(self._save)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)

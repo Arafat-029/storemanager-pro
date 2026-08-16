@@ -16,6 +16,7 @@ from app.controllers.supplier_controller import SupplierController
 from app.database.connection import db
 from app.ui.ui_loader import embed_ui
 from app.views.dialog_theme import apply_light_dialog_theme
+from app.views.widgets.screen_fit import clamp_min_size
 
 
 # ── Column indices ────────────────────────────────────────────────────────────
@@ -130,7 +131,7 @@ class ExcelImportDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Importer depuis un catalogue Excel")
-        self.setMinimumSize(1100, 700)
+        clamp_min_size(self, 1100, 700)
         apply_light_dialog_theme(self)
         self.setStyleSheet(self.styleSheet() + _QSS)
 
@@ -326,11 +327,11 @@ class ExcelImportDialog(QDialog):
 
             # Status
             if is_dup:
-                status = QTableWidgetItem("⚠ Doublon")
+                status = QTableWidgetItem("Doublon")
                 status.setForeground(QColor("#D97706"))
                 status.setBackground(QColor("#FFFBEB"))
             else:
-                status = QTableWidgetItem("✓ Nouveau")
+                status = QTableWidgetItem("Nouveau")
                 status.setForeground(QColor("#059669"))
                 status.setBackground(QColor("#F0FDF4"))
             fnt = status.font()
@@ -346,9 +347,9 @@ class ExcelImportDialog(QDialog):
         total   = len(products)
         new_cnt = total - dup_count
         self._lbl_hint.setText("")
-        self._chip_total.setText(f"📋  {total} produit(s)")
-        self._chip_new.setText(f"✓  {new_cnt} nouveau(x)")
-        self._chip_dup.setText(f"⚠  {dup_count} doublon(s)")
+        self._chip_total.setText(f"{total} produit(s)")
+        self._chip_new.setText(f"{new_cnt} nouveau(x)")
+        self._chip_dup.setText(f"{dup_count} doublon(s)")
         for chip in (self._chip_total, self._chip_new, self._chip_dup):
             chip.show()
         self._import_btn.setEnabled(new_cnt > 0)

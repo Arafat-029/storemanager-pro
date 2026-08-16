@@ -29,7 +29,7 @@
         <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
         <item>
          <widget class="QPushButton" name="btnClose">
-          <property name="text"><string>✕</string></property>
+          <property name="text"><string>×</string></property>
           <property name="fixedWidth"><number>28</number></property>
           <property name="fixedHeight"><number>28</number></property>
           <property name="styleSheet">
@@ -43,7 +43,7 @@ QPushButton:hover { background: rgba(255,255,255,0.4); }</string>
       </item>
       <item>
        <widget class="QLabel" name="lblIcon">
-        <property name="text"><string>🏪</string></property>
+        <property name="text"><string></string></property>
         <property name="alignment"><set>Qt::AlignCenter</set></property>
         <property name="styleSheet"><string>font-size: 48px; background: transparent; border: none;</string></property>
        </widget>
@@ -120,7 +120,7 @@ padding: 10px 14px; color: #111827; font-size: 14px;</string>
       </item>
       <item>
        <widget class="QPushButton" name="btnLogin">
-        <property name="text"><string>🔐   Se connecter</string></property>
+        <property name="text"><string>Se connecter</string></property>
         <property name="minimumHeight"><number>50</number></property>
         <property name="styleSheet">
          <string>QPushButton { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
@@ -134,13 +134,6 @@ QPushButton:pressed { background: #065F46; }</string>
       </item>
       <item>
        <spacer><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>8</height></size></property></spacer>
-      </item>
-      <item>
-       <widget class="QLabel" name="lblHint">
-        <property name="text"><string>Identifiants par défaut : admin / admin123</string></property>
-        <property name="alignment"><set>Qt::AlignCenter</set></property>
-        <property name="styleSheet"><string>color: #9CA3AF; font-size: 11px; background: transparent; border: none;</string></property>
-       </widget>
       </item>
      </layout>
     </widget>

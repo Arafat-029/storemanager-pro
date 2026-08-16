@@ -92,7 +92,7 @@ class CustomersView(QWidget):
         title.setStyleSheet("font-size: 20px; font-weight: 700; color: #111827;")
 
         self._search = QLineEdit()
-        self._search.setPlaceholderText("🔍  Rechercher par nom ou téléphone…")
+        self._search.setPlaceholderText("Rechercher par nom ou téléphone…")
         self._search.setFixedHeight(40)
         self._search.setMaximumWidth(320)
         self._search.textChanged.connect(self._refresh_if_loaded)
@@ -343,7 +343,7 @@ class CustomerDialog(QDialog):
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
 
-        btn_ok = QPushButton("✅  Enregistrer")
+        btn_ok = QPushButton("Enregistrer")
         btn_ok.clicked.connect(self._validate)
 
         btn_row.addStretch()
@@ -403,7 +403,7 @@ class PaymentDialog(QDialog):
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
 
-        btn_ok = QPushButton("✅  Valider")
+        btn_ok = QPushButton("Valider")
         btn_ok.clicked.connect(self._validate)
 
         btn_row.addStretch()

@@ -27,6 +27,7 @@ from app.controllers.supplier_controller import SupplierController
 from app.utils.helpers import format_price
 from app.views.widgets.price_input import PriceSpinBox
 from app.views.widgets.quantity_input import QuantitySpinBox, configure_manual_spinbox
+from app.views.widgets.screen_fit import clamp_min_size
 from app.views.dialog_theme import light_question, light_warning, light_information, light_critical
 
 
@@ -177,7 +178,7 @@ class SuppliersView(QWidget):
         title.setStyleSheet("font-size: 20px; font-weight: 700; color: #111827;")
 
         self._search = QLineEdit()
-        self._search.setPlaceholderText("🔍  Rechercher par nom ou téléphone…")
+        self._search.setPlaceholderText("Rechercher par nom ou téléphone…")
         self._search.setFixedHeight(40)
         self._search.setMaximumWidth(320)
         self._search.textChanged.connect(self.refresh)
@@ -473,7 +474,7 @@ class SupplierDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_save = QPushButton("💾  Enregistrer")
+        btn_save = QPushButton("Enregistrer")
         btn_save.clicked.connect(self._save)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)
@@ -523,7 +524,7 @@ class InvoiceDialog(QDialog):
         self._last_items_total = 0.0
 
         self.setWindowTitle("Modifier la facture" if invoice else "Ajouter une facture")
-        self.setMinimumSize(820, 520)
+        clamp_min_size(self, 820, 520)
         self.setStyleSheet(_WHITE_QSS)
         self._build_ui()
         self._populate()
@@ -631,7 +632,7 @@ class InvoiceDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("✅  Enregistrer")
+        btn_ok = QPushButton("Enregistrer")
         btn_ok.clicked.connect(self._validate)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)
@@ -825,7 +826,7 @@ class SupplierPaymentDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("✅  Valider le paiement")
+        btn_ok = QPushButton("Valider le paiement")
         btn_ok.clicked.connect(self._validate)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)
@@ -855,7 +856,7 @@ class SupplierInvoicesDialog(QDialog):
         self._supplier_name = supplier_name
         self._dirty = False
         self.setWindowTitle(f"Factures fournisseur — {supplier_name}")
-        self.setMinimumSize(1320, 760)
+        clamp_min_size(self, 1320, 760)
         self.setStyleSheet(_WHITE_QSS)
         self._build_ui()
         self._refresh()
@@ -877,7 +878,7 @@ class SupplierInvoicesDialog(QDialog):
 
         btn_add = QPushButton("＋  Ajouter facture")
         btn_add.clicked.connect(self._add_invoice)
-        btn_hist = QPushButton("📋  Historique")
+        btn_hist = QPushButton("Historique")
         btn_hist.setObjectName("btnSecondary")
         btn_hist.clicked.connect(self._view_history)
 
@@ -969,20 +970,20 @@ class SupplierInvoicesDialog(QDialog):
             # inflating these buttons past the row's available height.
             action_btn_style = "QPushButton { min-height: 30px; max-height: 30px; padding: 0 10px; }"
 
-            btn_pay = QPushButton("💰  Payer")
+            btn_pay = QPushButton("Payer")
             btn_pay.setObjectName("btnSuccess")
             btn_pay.setCursor(Qt.PointingHandCursor)
             btn_pay.setStyleSheet(action_btn_style)
             btn_pay.setEnabled(remaining > 0)
             btn_pay.clicked.connect(lambda _, inv=invoice: self._pay_invoice(inv))
 
-            btn_edit = QPushButton("✏  Modifier")
+            btn_edit = QPushButton("Modifier")
             btn_edit.setObjectName("btnSecondary")
             btn_edit.setCursor(Qt.PointingHandCursor)
             btn_edit.setStyleSheet(action_btn_style)
             btn_edit.clicked.connect(lambda _, inv=invoice: self._edit_invoice(inv))
 
-            btn_del = QPushButton("🗑")
+            btn_del = QPushButton("×")
             btn_del.setObjectName("btnDanger")
             btn_del.setCursor(Qt.PointingHandCursor)
             btn_del.setFixedWidth(36)
@@ -1082,7 +1083,7 @@ class HistoryDialog(QDialog):
     def __init__(self, supplier_name: str, transactions: list, balance_info: dict, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"Historique — {supplier_name}")
-        self.setMinimumSize(720, 540)
+        clamp_min_size(self, 720, 540)
         self.setStyleSheet(_WHITE_QSS)
         self._build_ui(supplier_name, transactions, balance_info)
 
@@ -1142,7 +1143,7 @@ class HistoryDialog(QDialog):
             tbl.setItem(row, 0, QTableWidgetItem((txn.get("created_at") or "")[:16]))
 
             is_invoice = txn["type"] == "invoice"
-            type_text = "📄 Facture" if is_invoice else "💰 Paiement"
+            type_text = "Facture" if is_invoice else "Paiement"
             type_item = QTableWidgetItem(type_text)
             type_item.setForeground(QColor("#D97706") if is_invoice else QColor("#059669"))
             tbl.setItem(row, 1, type_item)

@@ -62,6 +62,15 @@ def _cleanup_old_backups(keep: int = 30):
         old.unlink(missing_ok=True)
 
 
+def format_backup_size(num_bytes: int) -> str:
+    size = float(num_bytes)
+    for unit in ("o", "Ko", "Mo", "Go"):
+        if size < 1024 or unit == "Go":
+            return f"{size:.0f} {unit}" if unit == "o" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} Go"
+
+
 def list_backups() -> list[dict]:
     backups = sorted(
         list(BACKUP_DIR.glob("store_backup_*.db")) + list(BACKUP_DIR.glob("store_backup_*.sql")),
@@ -72,6 +81,7 @@ def list_backups() -> list[dict]:
             "name": p.name,
             "path": str(p),
             "size": p.stat().st_size,
+            "size_label": format_backup_size(p.stat().st_size),
             "date": datetime.fromtimestamp(p.stat().st_mtime).strftime("%d/%m/%Y %H:%M"),
         }
         for p in backups
@@ -84,6 +94,16 @@ def restore_backup(backup_path: str):
         raise FileNotFoundError(f"Backup not found: {backup_path}")
 
     if db.is_sqlite():
+        # The live database runs in WAL mode, so overwriting store.db while a
+        # connection is still open (or while stale -wal/-shm sidecar files
+        # from the OLD file are still sitting next to it) risks corruption:
+        # the WAL holds page references keyed to that specific file's
+        # layout, not the one we're about to drop in. Closing first lets
+        # SQLite checkpoint and release its handle cleanly; deleting the
+        # sidecars after that removes any that a prior crash left behind.
+        db.close()
+        for suffix in ("-wal", "-shm"):
+            Path(str(DATABASE_PATH) + suffix).unlink(missing_ok=True)
         shutil.copy2(src, DATABASE_PATH)
         return
 

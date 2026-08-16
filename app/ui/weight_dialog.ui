@@ -52,7 +52,7 @@
      </item>
      <item>
       <widget class="QPushButton" name="btnOk">
-       <property name="text"><string>✅  Ajouter</string></property>
+       <property name="text"><string>Ajouter</string></property>
       </widget>
      </item>
     </layout>

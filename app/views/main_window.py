@@ -29,6 +29,7 @@ from app.views.users_view import UsersView
 from app.views.expenses_view import ExpensesView
 from app.views.settings_view import SettingsView
 from app.views.dialog_theme import apply_dialog_theme, apply_light_messagebox_theme, light_information, light_warning
+from app.views.widgets.screen_fit import clamp_min_size
 from config import APP_NAME, APP_VERSION, ASSETS_DIR
 
 
@@ -36,7 +37,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
-        self.setMinimumSize(1280, 800)
+        clamp_min_size(self, 1280, 800)
 
         self._pages: dict[str, QWidget] = {}
         self._nav_buttons: dict[str, QPushButton] = {}
@@ -68,7 +69,7 @@ class MainWindow(QMainWindow):
         header_row = QHBoxLayout()
         header_row.setSpacing(10)
 
-        logo = QLabel("🏪")
+        logo = QLabel("")
         logo.setObjectName("appLogo")
         header_row.addWidget(logo)
 
@@ -86,7 +87,7 @@ class MainWindow(QMainWindow):
         self._user_info_lbl.setObjectName("userInfoLabel")
         header_row.addWidget(self._user_info_lbl)
 
-        self._btn_logout = QPushButton("⏻  Déconnexion")
+        self._btn_logout = QPushButton("Déconnexion")
         self._btn_logout.setObjectName("btnLogout")
         self._btn_logout.setFixedHeight(36)
         self._btn_logout.setStyleSheet(
@@ -100,17 +101,17 @@ class MainWindow(QMainWindow):
         topnav_layout.addLayout(header_row)
 
         self._nav_items = [
-            ("dashboard", "📊", "Dashboard"),
-            ("pos", "🛒", "Caisse"),
-            ("products", "📦", "Produits"),
-            ("categories", "🏷️", "Catégories"),
-            ("suppliers", "🚚", "Fournisseurs"),
-            ("stock", "📋", "Stock"),
-            ("sales", "💰", "Ventes"),
-            ("customers", "👥", "Clients"),
-            ("expenses", "💸", "Dépenses"),
-            ("users", "👤", "Utilisateurs"),
-            ("settings", "⚙️", "Paramètres"),
+            ("dashboard", "Dashboard"),
+            ("pos", "Caisse"),
+            ("products", "Produits"),
+            ("categories", "Catégories"),
+            ("suppliers", "Fournisseurs"),
+            ("stock", "Stock"),
+            ("sales", "Ventes"),
+            ("customers", "Clients"),
+            ("expenses", "Dépenses"),
+            ("users", "Utilisateurs"),
+            ("settings", "Paramètres"),
         ]
 
         self._nav_container = QWidget()
@@ -190,17 +191,17 @@ class MainWindow(QMainWindow):
         self._current_page = page_id
 
         titles = {
-            "dashboard": "📊  Tableau de bord",
-            "pos": "🛒  Caisse — Point de Vente",
-            "products": "📦  Gestion des produits",
-            "categories": "🏷️  Catégories",
-            "suppliers": "🚚  Fournisseurs",
-            "stock": "📋  Gestion du stock",
-            "sales": "💰  Historique des ventes",
-            "customers": "👥  Clients & Crédits",
-            "expenses": "💸  Dépenses",
-            "users": "👤  Gestion des utilisateurs",
-            "settings": "⚙️  Paramètres",
+            "dashboard": "Tableau de bord",
+            "pos": "Caisse — Point de Vente",
+            "products": "Gestion des produits",
+            "categories": "Catégories",
+            "suppliers": "Fournisseurs",
+            "stock": "Gestion du stock",
+            "sales": "Historique des ventes",
+            "customers": "Clients & Crédits",
+            "expenses": "Dépenses",
+            "users": "Gestion des utilisateurs",
+            "settings": "Paramètres",
         }
         self._page_title.setText(titles.get(page_id, page_id))
 
@@ -313,7 +314,7 @@ class MainWindow(QMainWindow):
 
         name = user.get("full_name", user.get("username", ""))
         role_text = "Administrateur" if user.get("role") == "admin" else "Caissier"
-        self._user_info_lbl.setText(f"👤 {name} • {role_text}")
+        self._user_info_lbl.setText(f"{name} • {role_text}")
 
         self._rebuild_nav()
 
@@ -375,11 +376,11 @@ class MainWindow(QMainWindow):
 
         allowed_pages = self._allowed_pages()
 
-        for page_id, icon, label in self._nav_items:
+        for page_id, label in self._nav_items:
             if page_id not in allowed_pages:
                 continue
 
-            btn = QPushButton(f"{icon} {label}")
+            btn = QPushButton(label)
             btn.setObjectName("topNavBtn")
             btn.setCheckable(True)
             btn.setMinimumHeight(36)
@@ -545,8 +546,33 @@ class MainWindow(QMainWindow):
         return super().closeEvent(event)
 
     def _auto_backup(self):
+        """Daily automatic backup.
+
+        A failure here used to be swallowed silently, which is the worst
+        possible outcome for a backup: the shop believes it is protected for
+        weeks while nothing is being written. Any failure is now recorded in
+        the audit log and shown to an admin, so it gets noticed while the
+        data is still there to save.
+        """
+        from app.database.backup import create_backup
+
         try:
-            from app.database.backup import create_backup
-            create_backup()
-        except Exception:
-            pass
+            path = create_backup()
+        except Exception as exc:
+            message = f"Échec de la sauvegarde automatique : {exc}"
+            try:
+                AuthController.log("BACKUP_FAILED", message)
+            except Exception:
+                pass  # never let logging the failure mask the failure itself
+            if AuthController.is_admin():
+                light_warning(
+                    self,
+                    "Sauvegarde échouée",
+                    f"{message}\n\n"
+                    "Vos données ne sont pas sauvegardées. Vérifiez l'espace "
+                    "disque et le dossier data/backups, puis relancez une "
+                    "sauvegarde depuis Paramètres.",
+                )
+            return
+
+        AuthController.log("BACKUP_AUTO", f"Sauvegarde automatique créée : {path}")

@@ -7,14 +7,21 @@ from app.database.schema import init_schema
 from config import DATABASE_PATH
 
 
+# Parent tables first: rows are inserted in this order and deleted in reverse,
+# so every foreign key already has its target by the time it is written.
+# sale_payments must trail customer_credit_payments as well as sales — it
+# points at both.
 TABLE_ORDER = [
     "users",
     "categories",
     "suppliers",
     "customers",
+    "customer_credit_payments",
     "products",
+    "product_sale_units",
     "sales",
     "sale_items",
+    "sale_payments",
     "stock_movements",
     "expenses",
     "product_returns",

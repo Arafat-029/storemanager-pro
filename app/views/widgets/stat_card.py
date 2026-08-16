@@ -1,12 +1,11 @@
 from __future__ import annotations
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel
-from PySide6.QtCore import Qt
 
 
 class StatCard(QFrame):
     """A KPI stat card with a compact rounded style."""
 
-    def __init__(self, title: str, value: str = "0", icon: str = "📊",
+    def __init__(self, title: str, value: str = "0",
                  color: str = "#7B8CDE", colored: bool = False, parent=None):
         super().__init__(parent)
         self._color = color
@@ -47,17 +46,7 @@ class StatCard(QFrame):
         left.addWidget(self._value)
         left.addStretch()
 
-        icon_lbl = QLabel(icon)
-        icon_style = "font-size: 36px;"
-        if colored:
-            icon_style += " color: rgba(255,255,255,0.82);"
-        else:
-            icon_style += f" color: {color};"
-        icon_lbl.setStyleSheet(icon_style)
-        icon_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-
         layout.addLayout(left, 1)
-        layout.addWidget(icon_lbl)
 
     def set_value(self, value: str):
         self._value.setText(value)

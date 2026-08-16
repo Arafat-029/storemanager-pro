@@ -28,7 +28,7 @@
      </item>
      <item>
       <widget class="QPushButton" name="btnFilter">
-       <property name="text"><string>🔍  Filtrer</string></property>
+       <property name="text"><string>Filtrer</string></property>
        <property name="minimumHeight"><number>40</number></property>
       </widget>
      </item>
@@ -94,7 +94,7 @@
      <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
      <item>
       <widget class="QPushButton" name="btnDelete">
-       <property name="text"><string>🗑️  Supprimer</string></property>
+       <property name="text"><string>Supprimer</string></property>
        <property name="cssClass" stdset="0"><string>btnDanger</string></property>
       </widget>
      </item>

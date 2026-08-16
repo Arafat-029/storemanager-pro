@@ -72,7 +72,7 @@
      </item>
      <item>
       <widget class="QPushButton" name="btnSave">
-       <property name="text"><string>💾  Enregistrer</string></property>
+       <property name="text"><string>Enregistrer</string></property>
       </widget>
      </item>
     </layout>

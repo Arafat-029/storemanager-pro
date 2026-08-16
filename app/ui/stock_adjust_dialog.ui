@@ -58,7 +58,7 @@
      </item>
      <item>
       <widget class="QPushButton" name="btnConfirm">
-       <property name="text"><string>✅  Confirmer</string></property>
+       <property name="text"><string>Confirmer</string></property>
       </widget>
      </item>
     </layout>

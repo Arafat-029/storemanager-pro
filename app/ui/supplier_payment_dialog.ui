@@ -65,7 +65,7 @@
      </item>
      <item>
       <widget class="QPushButton" name="btnOk">
-       <property name="text"><string>✅  Valider le paiement</string></property>
+       <property name="text"><string>Valider le paiement</string></property>
       </widget>
      </item>
     </layout>

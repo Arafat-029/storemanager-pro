@@ -42,31 +42,31 @@ class UsersView(QWidget):
         users_layout.addWidget(self._table, 1)
 
         btn_row = QHBoxLayout()
-        btn_edit = QPushButton("✏️  Modifier")
+        btn_edit = QPushButton("Modifier")
         btn_edit.setObjectName("btnSecondary")
         btn_edit.clicked.connect(self._edit)
-        btn_del = QPushButton("🗑️  Désactiver")
+        btn_del = QPushButton("Désactiver")
         btn_del.setObjectName("btnDanger")
         btn_del.clicked.connect(self._delete)
         btn_row.addStretch()
         btn_row.addWidget(btn_edit)
         btn_row.addWidget(btn_del)
         users_layout.addLayout(btn_row)
-        tabs.addTab(users_widget, "👤  Utilisateurs")
+        tabs.addTab(users_widget, "Utilisateurs")
 
         # Logs tab
         logs_widget = QWidget()
         logs_layout = QVBoxLayout(logs_widget)
         logs_layout.setContentsMargins(0, 16, 0, 0)
 
-        btn_refresh_logs = QPushButton("↻  Actualiser")
+        btn_refresh_logs = QPushButton("Actualiser")
         btn_refresh_logs.setObjectName("btnSecondary")
         btn_refresh_logs.clicked.connect(self._load_logs)
         logs_layout.addWidget(btn_refresh_logs, 0, __import__("PySide6.QtCore", fromlist=["Qt"]).Qt.AlignRight)
 
         self._log_table = DataTable(["Date", "Utilisateur", "Action", "Détails"])
         logs_layout.addWidget(self._log_table, 1)
-        tabs.addTab(logs_widget, "📋  Journal des actions")
+        tabs.addTab(logs_widget, "Journal des actions")
         tabs.currentChanged.connect(lambda i: self._load_logs() if i == 1 else None)
 
     def refresh(self):
@@ -158,7 +158,7 @@ class UserDialog(QDialog):
         self._password = QLineEdit()
         self._password.setMinimumHeight(42)
         self._password.setEchoMode(QLineEdit.Password)
-        self._password.setPlaceholderText("admin")
+        self._password.setPlaceholderText("Au moins 6 caractères")
 
         form.addRow("Identifiant *:", self._username)
         form.addRow("Nom complet *:", self._full_name)
@@ -171,15 +171,12 @@ class UserDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_save = QPushButton("💾  Enregistrer")
+        btn_save = QPushButton("Enregistrer")
         btn_save.clicked.connect(self._save)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_save)
         layout.addLayout(btn_row)
-
-        if not self._user:
-            self._password.setText("admin")
 
     def _save(self):
         username = self._username.text().strip()
@@ -191,6 +188,11 @@ class UserDialog(QDialog):
             return
         if not self._user and not password:
             QMessageBox.warning(self, "Erreur", "Le mot de passe est obligatoire pour un nouvel utilisateur.")
+            return
+        # Empty on an edit means "keep the current password"; anything the
+        # user does type has to clear the minimum length.
+        if password and len(password) < 6:
+            QMessageBox.warning(self, "Erreur", "Le mot de passe doit contenir au moins 6 caractères.")
             return
 
         data = {

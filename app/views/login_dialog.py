@@ -38,7 +38,7 @@ class LoginDialog(QDialog):
         close_row = QHBoxLayout()
         close_row.setContentsMargins(0, 0, 0, 0)
         close_row.addStretch()
-        btn_close_x = QPushButton("✕")
+        btn_close_x = QPushButton("×")
         btn_close_x.setFixedSize(28, 28)
         # The app-wide QPushButton rule carries its own min-height/padding that
         # overrides setFixedSize(), stretching this into a tall pill — pin the
@@ -55,7 +55,7 @@ class LoginDialog(QDialog):
         close_row.addWidget(btn_close_x)
         h_layout.addLayout(close_row)
 
-        icon = QLabel("🏪")
+        icon = QLabel("")
         icon.setAlignment(Qt.AlignCenter)
         icon.setStyleSheet("font-size: 48px; background: transparent; border: none;")
 
@@ -94,7 +94,6 @@ class LoginDialog(QDialog):
         self._username = QLineEdit()
         self._username.setPlaceholderText("Entrez votre identifiant")
         self._username.setMinimumHeight(46)
-        self._username.setText("admin")
         self._username.setStyleSheet(
             "background: #F9FAFB; border: 1.5px solid #D1D5DB; border-radius: 8px;"
             "padding: 10px 14px; color: #111827; font-size: 14px;"
@@ -107,7 +106,6 @@ class LoginDialog(QDialog):
         self._password.setEchoMode(QLineEdit.Password)
         self._password.setPlaceholderText("Entrez votre mot de passe")
         self._password.setMinimumHeight(46)
-        self._password.setText("admin")
         self._password.setStyleSheet(
             "background: #F9FAFB; border: 1.5px solid #D1D5DB; border-radius: 8px;"
             "padding: 10px 14px; color: #111827; font-size: 14px;"
@@ -120,7 +118,7 @@ class LoginDialog(QDialog):
         )
         self._error_label.setAlignment(Qt.AlignCenter)
 
-        btn = QPushButton("🔐   Se connecter")
+        btn = QPushButton("Se connecter")
         btn.setMinimumHeight(50)
         btn.setStyleSheet(
             "QPushButton {"
@@ -134,12 +132,6 @@ class LoginDialog(QDialog):
         )
         btn.clicked.connect(self._do_login)
 
-        hint = QLabel("Identifiants par défaut : admin / admin  •  001 / 001")
-        hint.setAlignment(Qt.AlignCenter)
-        hint.setStyleSheet(
-            "color: #9CA3AF; font-size: 11px; background: transparent; border: none;"
-        )
-
         form_layout.addWidget(lbl_user)
         form_layout.addWidget(self._username)
         form_layout.addSpacing(4)
@@ -149,16 +141,16 @@ class LoginDialog(QDialog):
         form_layout.addSpacing(8)
         form_layout.addWidget(btn)
         form_layout.addStretch()
-        form_layout.addWidget(hint)
 
         layout.addWidget(form)
+        self._username.setFocus()
 
     def reject(self):
         """Single exit gate for the login screen.
 
         Both callers (main.py at startup and MainWindow._logout) treat a
         non-accepted result as "quit the application", so every path that
-        closes this dialog without a successful login — the ✕ button and the
+        closes this dialog without a successful login — the × button and the
         Escape key alike — must confirm first instead of killing the app
         silently.
         """

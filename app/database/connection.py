@@ -1,6 +1,8 @@
 from __future__ import annotations
 import sqlite3
 import threading
+from contextlib import contextmanager
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from config import (
@@ -123,13 +125,32 @@ class DatabaseConnection:
         finally:
             conn.close()
 
+    @staticmethod
+    def _local_utc_offset() -> str:
+        """Machine's current UTC offset as MySQL expects it, e.g. '+01:00'.
+
+        Read at connection time so a DST change is picked up on the next
+        launch instead of being frozen at install time.
+        """
+        offset = datetime.now().astimezone().utcoffset() or timedelta(0)
+        total_minutes = int(offset.total_seconds()) // 60
+        sign = "+" if total_minutes >= 0 else "-"
+        total_minutes = abs(total_minutes)
+        return f"{sign}{total_minutes // 60:02d}:{total_minutes % 60:02d}"
+
     def get_connection(self):
         if not hasattr(self._local, "conn") or self._local.conn is None:
             if self.is_mysql():
                 self._ensure_mysql_database()
                 self._local.conn = pymysql.connect(**self._mysql_connect_kwargs())
                 with self._local.conn.cursor() as cursor:
-                    cursor.execute("SET time_zone = '+00:00'")
+                    # Store timestamps in LOCAL time, matching what SQLite does
+                    # via datetime('now','localtime'). This must stay aligned
+                    # with Python's datetime.now(): the daily takings query
+                    # compares NOW()-written rows against a local date computed
+                    # in Python, so a UTC session would file every sale made
+                    # between midnight and the UTC offset under the wrong day.
+                    cursor.execute("SET time_zone = %s", (self._local_utc_offset(),))
             else:
                 self._local.conn = sqlite3.connect(self._db_path)
                 self._local.conn.row_factory = sqlite3.Row
@@ -151,6 +172,48 @@ class DatabaseConnection:
     def database_name(self) -> str:
         return MYSQL_DATABASE if self.is_mysql() else ""
 
+    @property
+    def in_transaction(self) -> bool:
+        return getattr(self._local, "tx_depth", 0) > 0
+
+    @contextmanager
+    def transaction(self):
+        """Run a block as one all-or-nothing unit of work.
+
+            with db.transaction():
+                db.execute(...)
+                SomeController.helper()   # its writes join this transaction
+
+        Everything written inside lands together or not at all. Without this,
+        execute() commits on every call, so a helper called midway through a
+        multi-step operation (a sale writing its lines, then deducting stock)
+        would silently commit the half-finished work and leave rollback with
+        nothing left to undo.
+
+        Nesting is allowed: only the outermost block commits, so a controller
+        that already runs inside a transaction can call another one safely.
+
+        No explicit BEGIN is issued. Both backends already keep an implicit
+        transaction open (pymysql with autocommit=False, sqlite3 with its
+        default isolation_level), so a BEGIN here would risk committing that
+        pending work as a side effect. What matters is that nothing commits
+        until this block ends, which the in_transaction guard below enforces.
+        """
+        conn = self.get_connection()
+        depth = getattr(self._local, "tx_depth", 0)
+        self._local.tx_depth = depth + 1
+        try:
+            yield conn
+        except Exception:
+            self._local.tx_depth = depth
+            if depth == 0:
+                conn.rollback()
+            raise
+        else:
+            self._local.tx_depth = depth
+            if depth == 0:
+                conn.commit()
+
     def execute(self, query: str, params: tuple = ()):
         conn = self.get_connection()
         cursor = conn.cursor() if self.is_mysql() else None
@@ -160,10 +223,14 @@ class DatabaseConnection:
                 cursor.execute(translated, params)
             else:
                 cursor = conn.execute(translated, params)
-            conn.commit()
+            # Inside a transaction() block the caller owns the commit; ending
+            # it here would break the block's all-or-nothing guarantee.
+            if not self.in_transaction:
+                conn.commit()
             return cursor
         except Exception:
-            conn.rollback()
+            if not self.in_transaction:
+                conn.rollback()
             raise
 
     def executemany(self, query: str, params_list: list):
@@ -175,10 +242,12 @@ class DatabaseConnection:
                 cursor.executemany(translated, params_list)
             else:
                 cursor = conn.executemany(translated, params_list)
-            conn.commit()
+            if not self.in_transaction:
+                conn.commit()
             return cursor
         except Exception:
-            conn.rollback()
+            if not self.in_transaction:
+                conn.rollback()
             raise
 
     def execute_script(self, script: str) -> None:
@@ -276,7 +345,12 @@ class DatabaseConnection:
                 """,
                 (MYSQL_DATABASE, table_name),
             )
-            return [str(row["column_name"]) for row in rows]
+            # MySQL 8 hands back information_schema metadata under UPPERCASE
+            # keys ("COLUMN_NAME"), MySQL 5.7 under lowercase. Reading the
+            # row's single value sidesteps the difference entirely — looking
+            # the key up by name raised KeyError on 8.x and took every schema
+            # migration down with it.
+            return [str(next(iter(row.values()))) for row in rows]
         rows = self.get_connection().execute(f"PRAGMA table_info({table_name})").fetchall()
         return [str(row[1]) for row in rows]
 

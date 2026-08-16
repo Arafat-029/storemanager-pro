@@ -20,6 +20,7 @@ from app.controllers.stock_controller import StockController
 from app.controllers.supplier_controller import SupplierController
 from app.views.widgets.price_input import PriceSpinBox
 from app.views.widgets.quantity_input import QuantitySpinBox
+from app.views.widgets.screen_fit import clamp_min_size
 
 
 _WHITE_QSS = (
@@ -210,7 +211,7 @@ class _ReceptionWarningsDialog(QDialog):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(14)
 
-        title = QLabel("⚠️  Produits à vérifier")
+        title = QLabel("Produits à vérifier")
         title.setStyleSheet("font-size: 17px; font-weight: 700; color: #B45309;")
         layout.addWidget(title)
 
@@ -367,7 +368,7 @@ class InvoiceEntryDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Ajout facture fournisseur")
-        self.setMinimumSize(980, 620)
+        clamp_min_size(self, 980, 620)
         self.setStyleSheet(_WHITE_QSS)
 
         self._suppliers = SupplierController.get_all()
@@ -386,7 +387,7 @@ class InvoiceEntryDialog(QDialog):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(24, 0, 24, 0)
 
-        title_lbl = QLabel("📄  Ajout facture fournisseur")
+        title_lbl = QLabel("Ajout facture fournisseur")
         title_lbl.setStyleSheet(
             "font-size: 16px; font-weight: 700; color: white; background: transparent;"
         )
@@ -511,7 +512,7 @@ class InvoiceEntryDialog(QDialog):
         btn_cancel.setFixedHeight(38)
         btn_cancel.clicked.connect(self.reject)
 
-        btn_ok = QPushButton("✅  Confirmer facture")
+        btn_ok = QPushButton("Confirmer facture")
         btn_ok.setFixedHeight(38)
         btn_ok.clicked.connect(self._confirm)
 
@@ -693,7 +694,7 @@ class InvoiceEntryDialog(QDialog):
                 )
 
         message = (
-            f"✅  Facture enregistrée.\n"
+            f"Facture enregistrée.\n"
             f"Produits mis à jour : {result['item_count']}\n"
             f"Total : {result['amount_total']:.3f} TND\n"
             f"Payé : {result['amount_paid']:.3f} TND\n"

@@ -7,8 +7,12 @@ class PriceSpinBox(QDoubleSpinBox):
     """Manual entry spinbox for Tunisian dinar amounts (X.XXX format).
 
     Mouse wheel is ignored to prevent accidental changes.
-    Integer input is kept as dinars:
-    10 -> 10.000, 20 -> 20.000
+
+    Cash-register convention: plain digits fill in from the millime up (1
+    TND = 1000 millimes), so "50" becomes 0.050 and "1000" becomes 1.000 —
+    never fifty or a thousand dinars. Typing an explicit decimal point
+    ("12.5") is still taken literally as 12.500. A comma is treated the same
+    as a dot, since the app only ever displays/accepts "." as the separator.
     """
 
     def __init__(self, parent=None):
@@ -39,12 +43,17 @@ class PriceSpinBox(QDoubleSpinBox):
             s = s.replace(sfx, "")
         if pfx := self.prefix():
             s = s.replace(pfx, "")
-        return s.replace(" ", "").replace(" ", "").replace("\xa0", "").strip()
+        s = s.replace(" ", "").replace(" ", "").replace("\xa0", "").strip()
+        return s.replace(",", ".")
 
     def valueFromText(self, text: str) -> float:
         clean = self._clean(text)
         if not clean:
             return 0.0
+        if clean.isdigit():
+            # Cash-register convention: raw digits fill in from the millime
+            # up, so "50" means 0.050 TND and "1000" means 1.000 TND.
+            return int(clean) / 1000.0
         try:
             return float(clean)
         except ValueError:
@@ -69,9 +78,6 @@ class PriceSpinBox(QDoubleSpinBox):
         if not clean or clean == "0":
             return ""
         if "." not in clean and clean.isdigit():
-            try:
-                val = float(clean)
-                return self.textFromValue(val) if val > 0 else ""
-            except ValueError:
-                pass
+            val = self.valueFromText(text)
+            return self.textFromValue(val) if val > 0 else ""
         return text

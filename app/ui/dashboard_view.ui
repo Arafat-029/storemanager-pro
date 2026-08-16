@@ -47,7 +47,7 @@
         </item>
         <item>
          <widget class="QLabel" name="companyPhone">
-          <property name="text"><string>📞 +216 XX XXX XXX</string></property>
+          <property name="text"><string>+216 XX XXX XXX</string></property>
           <property name="styleSheet"><string>font-size: 12px; color: rgba(255,255,255,0.8);</string></property>
          </widget>
         </item>
@@ -56,7 +56,7 @@
      </item>
      <item>
       <widget class="QPushButton" name="btnRefresh">
-       <property name="text"><string>↻  Actualiser</string></property>
+       <property name="text"><string>Actualiser</string></property>
        <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
        <property name="fixedWidth"><number>120</number></property>
       </widget>
@@ -110,7 +110,7 @@
         <property name="rightMargin"><number>16</number></property><property name="bottomMargin"><number>16</number></property>
         <item>
          <widget class="QLabel" name="lblLowStockTitle">
-          <property name="text"><string>⚠️  Produits en stock faible</string></property>
+          <property name="text"><string>Produits en stock faible</string></property>
           <property name="styleSheet"><string>font-weight: 700; font-size: 15px;</string></property>
          </widget>
         </item>
@@ -137,7 +137,7 @@
         <property name="rightMargin"><number>16</number></property><property name="bottomMargin"><number>16</number></property>
         <item>
          <widget class="QLabel" name="lblTopTitle">
-          <property name="text"><string>🏆  Top produits (ce mois)</string></property>
+          <property name="text"><string>Top produits (ce mois)</string></property>
           <property name="styleSheet"><string>font-weight: 700; font-size: 15px;</string></property>
          </widget>
         </item>

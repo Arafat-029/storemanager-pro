@@ -43,14 +43,14 @@
      </item>
      <item>
       <widget class="QPushButton" name="btnFilter">
-       <property name="text"><string>🔍  Filtrer</string></property>
+       <property name="text"><string>Filtrer</string></property>
        <property name="minimumHeight"><number>40</number></property>
       </widget>
      </item>
      <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
      <item>
       <widget class="QPushButton" name="btnExport">
-       <property name="text"><string>📊  Exporter Excel</string></property>
+       <property name="text"><string>Exporter Excel</string></property>
        <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
        <property name="minimumHeight"><number>40</number></property>
       </widget>
@@ -161,19 +161,19 @@
      <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
      <item>
       <widget class="QPushButton" name="btnDetails">
-       <property name="text"><string>👁  Détails</string></property>
+       <property name="text"><string>Détails</string></property>
        <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="btnReprint">
-       <property name="text"><string>🖨  Réimprimer ticket</string></property>
+       <property name="text"><string>Réimprimer ticket</string></property>
        <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="btnCancel">
-       <property name="text"><string>❌  Annuler vente</string></property>
+       <property name="text"><string>Annuler vente</string></property>
        <property name="cssClass" stdset="0"><string>btnDanger</string></property>
       </widget>
      </item>

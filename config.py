@@ -4,6 +4,18 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).parent
 
+# Settings come from the .env file sitting next to this one (see .env.example).
+# Keeping them in a file rather than shell environment variables means the app
+# behaves the same however it is launched — double-clicked shortcut, scheduled
+# task, or terminal — instead of silently falling back to defaults when a
+# variable someone set by hand is missing.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(BASE_DIR / ".env")
+except ImportError:  # dependency missing: fall back to real env vars only
+    pass
+
 # Database
 DB_BACKEND = os.getenv("DB_BACKEND", "mysql").strip().lower()
 DATABASE_PATH = BASE_DIR / "data" / "store.db"
@@ -11,7 +23,7 @@ BACKUP_DIR = BASE_DIR / "data" / "backups"
 
 MYSQL_HOST = os.getenv("MYSQL_HOST", "127.0.0.1")
 MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
-MYSQL_USER = os.getenv("MYSQL_USER", "root")
+MYSQL_USER = os.getenv("MYSQL_USER", "storemanager")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "storemanager")
 MYSQL_CHARSET = os.getenv("MYSQL_CHARSET", "utf8mb4")

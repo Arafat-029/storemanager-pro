@@ -1,7 +1,9 @@
 from __future__ import annotations
+from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
+    QHBoxLayout,
     QPushButton,
     QLabel,
     QFormLayout,
@@ -11,11 +13,14 @@ from PySide6.QtWidgets import (
     QFrame,
     QScrollArea,
     QGroupBox,
+    QFileDialog,
+    QApplication,
 )
 from PySide6.QtCore import Qt
 
+from app.views.widgets.data_table import DataTable
 from app.database.connection import db
-from app.database.backup import create_backup, list_backups
+from app.database.backup import create_backup, list_backups, restore_backup
 from app.controllers.auth_controller import AuthController
 
 
@@ -40,7 +45,7 @@ class SettingsView(QWidget):
         layout.setSpacing(24)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        store_group = self._make_group("🏪  Informations du magasin")
+        store_group = self._make_group("Informations du magasin")
         store_form = QFormLayout()
 
         self._store_name = QLineEdit()
@@ -73,22 +78,46 @@ class SettingsView(QWidget):
         store_form.addRow("Thème:", self._theme)
         store_group.layout().addLayout(store_form)
 
-        btn_save_store = QPushButton("💾  Sauvegarder")
+        btn_save_store = QPushButton("Sauvegarder")
         btn_save_store.clicked.connect(self._save_store)
         store_group.layout().addWidget(btn_save_store, 0, Qt.AlignRight)
         layout.addWidget(store_group)
 
-        backup_group = self._make_group("💾  Sauvegardes")
-        btn_backup = QPushButton("📥  Créer une sauvegarde maintenant")
+        backup_group = self._make_group("Sauvegardes")
+
+        backup_note = QLabel(
+            "Les sauvegardes sont stockées sur cet ordinateur (data/backups). "
+            "Si le PC est perdu, volé ou en panne, ces fichiers le sont aussi — "
+            "copiez-les régulièrement sur une clé USB ou un cloud pour être "
+            "vraiment protégé."
+        )
+        backup_note.setWordWrap(True)
+        backup_note.setStyleSheet("color: #6B7280; font-size: 11px;")
+        backup_group.layout().addWidget(backup_note)
+
+        btn_backup = QPushButton("Créer une sauvegarde maintenant")
         btn_backup.setObjectName("btnSuccess")
         btn_backup.clicked.connect(self._do_backup)
-
-        self._backup_list = QLabel("Chargement...")
-        self._backup_list.setStyleSheet("color: #6B7280; font-size: 12px;")
-        self._backup_list.setWordWrap(True)
-
         backup_group.layout().addWidget(btn_backup, 0, Qt.AlignLeft)
-        backup_group.layout().addWidget(self._backup_list)
+
+        self._backup_table = DataTable(["Date", "Nom", "Taille"])
+        self._backup_table.setMinimumHeight(180)
+        self._backup_table.setMaximumHeight(220)
+        backup_group.layout().addWidget(self._backup_table)
+
+        restore_row = QHBoxLayout()
+        restore_row.setSpacing(8)
+        btn_restore_selected = QPushButton("Restaurer la sauvegarde sélectionnée")
+        btn_restore_selected.setObjectName("btnDanger")
+        btn_restore_selected.clicked.connect(self._restore_selected)
+        btn_restore_file = QPushButton("Restaurer depuis un fichier…")
+        btn_restore_file.setObjectName("btnSecondary")
+        btn_restore_file.clicked.connect(self._restore_from_file)
+        restore_row.addWidget(btn_restore_selected)
+        restore_row.addWidget(btn_restore_file)
+        restore_row.addStretch()
+        backup_group.layout().addLayout(restore_row)
+
         layout.addWidget(backup_group)
 
         layout.addStretch()
@@ -155,9 +184,53 @@ class SettingsView(QWidget):
 
     def _refresh_backup_list(self):
         backups = list_backups()
-        if not backups:
-            self._backup_list.setText("Aucune sauvegarde trouvée.")
+        rows = [{**b, "size": b["size_label"]} for b in backups]
+        self._backup_table.set_data(rows, ["date", "name", "size"])
+
+    def _restore_selected(self):
+        row = self._backup_table.selected_row_data()
+        if not row:
+            QMessageBox.information(self, "Restauration", "Sélectionnez d'abord une sauvegarde dans la liste.")
+            return
+        self._confirm_and_restore(row["path"], row["name"])
+
+    def _restore_from_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Choisir un fichier de sauvegarde",
+            "",
+            "Sauvegardes (*.db *.sql);;Tous les fichiers (*)",
+        )
+        if not path:
+            return
+        self._confirm_and_restore(path, Path(path).name)
+
+    def _confirm_and_restore(self, backup_path: str, backup_name: str):
+        reply = QMessageBox.warning(
+            self,
+            "Confirmer la restauration",
+            f"Restaurer « {backup_name} » va remplacer TOUTES les données "
+            "actuelles (produits, ventes, clients, stock...) par celles de "
+            "cette sauvegarde. Cette action est irréversible.\n\n"
+            "Si des ventes ou modifications ont eu lieu depuis cette "
+            "sauvegarde, elles seront perdues.\n\n"
+            "Continuer ?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
             return
 
-        lines = [f"• {backup['date']}  —  {backup['name']}" for backup in backups[:5]]
-        self._backup_list.setText("\n".join(lines))
+        try:
+            restore_backup(backup_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", f"La restauration a échoué :\n{e}")
+            return
+
+        QMessageBox.information(
+            self,
+            "Restauration terminée",
+            "Les données ont été restaurées. L'application va maintenant se "
+            "fermer — relancez-la pour utiliser les données restaurées.",
+        )
+        QApplication.instance().quit()

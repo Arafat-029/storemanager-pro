@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QPushButton,
     QSizePolicy,
+    QToolTip,
 )
 from PySide6.QtCore import Qt, Signal, QPointF
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
@@ -25,12 +26,59 @@ class DailyProfitChart(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._points: list[dict] = []
+        self._line_color = QColor("#1D4ED8")
+        self._point_color = QColor("#1E3A8A")
+        self._fill_color = QColor(30, 64, 175, 24)
+        # Geometry captured during paintEvent so mouseMoveEvent can hit-test
+        # against the exact same pixel positions the curve was drawn at,
+        # instead of recomputing (and risking drift from) the layout twice.
+        self._plot_points: list[QPointF] = []
+        self._chart_rect = None
+        self._hover_index: int | None = None
         self.setMinimumHeight(240)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setMouseTracking(True)
 
-    def set_data(self, points: list[dict]) -> None:
+    def set_data(self, points: list[dict], line_color: str = "#1D4ED8", point_color: str = "#1E3A8A") -> None:
         self._points = list(points or [])
+        self._line_color = QColor(line_color)
+        self._point_color = QColor(point_color)
+        fill = QColor(line_color)
+        fill.setAlpha(24)
+        self._fill_color = fill
+        self._hover_index = None
         self.update()
+
+    def _tooltip_text(self, point: dict) -> str:
+        label = str(point.get("label") or point.get("date") or "")
+        profit = float(point.get("profit", 0) or 0)
+        expenses = float(point.get("expenses", 0) or 0)
+        losses = float(point.get("losses", 0) or 0)
+        lines = [f"<b>{label}</b>", f"Gain net : {format_price(profit)}"]
+        if expenses:
+            lines.append(f"Dépenses : {format_price(expenses)}")
+        if losses:
+            lines.append(f"Pertes : {format_price(losses)}")
+        return "<br>".join(lines)
+
+    def mouseMoveEvent(self, event):
+        if not self._plot_points:
+            super().mouseMoveEvent(event)
+            return
+        x = event.position().x()
+        nearest = min(range(len(self._plot_points)), key=lambda i: abs(self._plot_points[i].x() - x))
+        if nearest != self._hover_index:
+            self._hover_index = nearest
+            self.update()
+        QToolTip.showText(event.globalPosition().toPoint(), self._tooltip_text(self._points[nearest]), self)
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event):
+        if self._hover_index is not None:
+            self._hover_index = None
+            self.update()
+        QToolTip.hideText()
+        super().leaveEvent(event)
 
     @staticmethod
     def _format_axis_value(value: float) -> str:
@@ -46,6 +94,9 @@ class DailyProfitChart(QWidget):
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+
+        self._plot_points = []
+        self._chart_rect = None
 
         chart_rect = self.rect().adjusted(68, 16, -18, -34)
         if chart_rect.width() <= 0 or chart_rect.height() <= 0:
@@ -118,11 +169,11 @@ class DailyProfitChart(QWidget):
         area_path.lineTo(float(x_positions[-1]), float(zero_y))
         area_path.closeSubpath()
 
-        painter.fillPath(area_path, QColor(30, 64, 175, 24))
-        painter.setPen(QPen(QColor("#1D4ED8"), 3))
+        painter.fillPath(area_path, self._fill_color)
+        painter.setPen(QPen(self._line_color, 3))
         painter.drawPath(path)
 
-        point_pen = QPen(QColor("#1E3A8A"))
+        point_pen = QPen(self._point_color)
         point_pen.setWidth(2)
         painter.setPen(point_pen)
         painter.setBrush(QColor("#FFFFFF"))
@@ -130,6 +181,7 @@ class DailyProfitChart(QWidget):
             x = x_positions[index]
             y = y_for(float(point.get("profit", 0) or 0))
             painter.drawEllipse(QPointF(float(x), float(y)), 3.5, 3.5)
+            self._plot_points.append(QPointF(float(x), float(y)))
 
         painter.setPen(QColor("#64748B"))
         label_indexes = {0, len(self._points) - 1}
@@ -141,6 +193,23 @@ class DailyProfitChart(QWidget):
             label = str(point.get("label") or "")
             painter.drawText(int(x) - 28, chart_rect.bottom() + 8, 56, 18, Qt.AlignCenter, label)
 
+        self._chart_rect = chart_rect
+
+        # Hover feedback: a vertical guide line plus a bigger ring on the
+        # nearest point, so the reader can see exactly which point the
+        # tooltip currently describes.
+        if self._hover_index is not None and 0 <= self._hover_index < len(self._plot_points):
+            hovered = self._plot_points[self._hover_index]
+            guide_pen = QPen(QColor("#94A3B8"))
+            guide_pen.setStyle(Qt.DashLine)
+            guide_pen.setWidth(1)
+            painter.setPen(guide_pen)
+            painter.drawLine(int(hovered.x()), chart_rect.top(), int(hovered.x()), chart_rect.bottom())
+
+            painter.setPen(QPen(self._point_color, 2))
+            painter.setBrush(self._line_color)
+            painter.drawEllipse(hovered, 5.5, 5.5)
+
 
 class DashboardView(QWidget):
     tile_clicked = Signal(str)
@@ -151,6 +220,8 @@ class DashboardView(QWidget):
         self._secondary_cards = []
         self._profit_period = "day"
         self._profit_buttons: dict[str, QPushButton] = {}
+        self._profit_credit_scope = "non_credit"
+        self._credit_scope_buttons: dict[str, QPushButton] = {}
         self._build_ui()
         self.refresh()
 
@@ -200,13 +271,13 @@ class DashboardView(QWidget):
         company_name = QLabel("SOLUTIONS STOREMANAGER PRO")
         company_name.setStyleSheet("font-size: 14px; font-weight: 700; color: #0F172A;")
 
-        company_phone = QLabel("📞 +216 XX XXX XXX")
+        company_phone = QLabel("+216 XX XXX XXX")
         company_phone.setStyleSheet("font-size: 12px; color: #64748B;")
 
         banner_layout.addWidget(company_name)
         banner_layout.addWidget(company_phone)
 
-        refresh_btn = QPushButton("↻  Actualiser")
+        refresh_btn = QPushButton("Actualiser")
         refresh_btn.setObjectName("btnSecondary")
         refresh_btn.setFixedWidth(130)
         refresh_btn.setFixedHeight(38)
@@ -226,10 +297,10 @@ class DashboardView(QWidget):
         self._cards_grid.setHorizontalSpacing(14)
         self._cards_grid.setVerticalSpacing(14)
 
-        self._card_revenue = StatCard("Chiffre d'affaires (Aujourd'hui)", "0.000 TND", "💰", "#059669", colored=False)
-        self._card_sales = StatCard("Ventes (Aujourd'hui)", "0", "🧾", "#2563EB", colored=False)
-        self._card_products = StatCard("Produits actifs", "0", "📦", "#D97706", colored=False)
-        self._card_low = StatCard("Stock faible", "0", "⚠️", "#DC2626", colored=False)
+        self._card_revenue = StatCard("Chiffre d'affaires (Aujourd'hui)", "0.000 TND", "#059669", colored=False)
+        self._card_sales = StatCard("Ventes (Aujourd'hui)", "0", "#2563EB", colored=False)
+        self._card_products = StatCard("Produits actifs", "0", "#D97706", colored=False)
+        self._card_low = StatCard("Stock faible", "0", "#DC2626", colored=False)
 
         self._primary_cards = [
             self._card_revenue,
@@ -243,10 +314,10 @@ class DashboardView(QWidget):
         self._month_grid.setHorizontalSpacing(14)
         self._month_grid.setVerticalSpacing(14)
 
-        self._card_profit_today = StatCard("Gain net du jour", "0.000 TND", "📊", "#0F766E", colored=False)
-        self._card_month = StatCard("CA du mois", "0.000 TND", "📈", "#0891B2", colored=False)
-        self._card_inv_val = StatCard("Valeur du stock", "0.000 TND", "🏭", "#7C3AED", colored=False)
-        self._card_expenses = StatCard("Dépenses du mois", "0.000 TND", "💸", "#EA580C", colored=False)
+        self._card_profit_today = StatCard("Gain net du jour", "0.000 TND", "#0F766E", colored=False)
+        self._card_month = StatCard("CA du mois", "0.000 TND", "#0891B2", colored=False)
+        self._card_inv_val = StatCard("Valeur du stock", "0.000 TND", "#7C3AED", colored=False)
+        self._card_expenses = StatCard("Dépenses du mois", "0.000 TND", "#EA580C", colored=False)
 
         self._secondary_cards = [
             self._card_profit_today,
@@ -260,7 +331,7 @@ class DashboardView(QWidget):
         self._bottom_grid.setHorizontalSpacing(16)
         self._bottom_grid.setVerticalSpacing(16)
 
-        self._low_stock_frame = self._build_panel("⚠️  Produits en stock faible")
+        self._low_stock_frame = self._build_panel("Produits en stock faible")
         self._low_stock_scroll = QScrollArea()
         self._low_stock_scroll.setWidgetResizable(True)
         self._low_stock_scroll.setFrameShape(QFrame.NoFrame)
@@ -272,7 +343,7 @@ class DashboardView(QWidget):
         self._low_stock_scroll.setWidget(self._low_stock_inner)
         self._low_stock_frame.layout().addWidget(self._low_stock_scroll, 1)
 
-        self._top_frame = self._build_panel("🏆  Top produits (quantité vendue)")
+        self._top_frame = self._build_panel("Top produits (quantité vendue)")
         self._top_scroll = QScrollArea()
         self._top_scroll.setWidgetResizable(True)
         self._top_scroll.setFrameShape(QFrame.NoFrame)
@@ -287,12 +358,27 @@ class DashboardView(QWidget):
         self._bottom_grid.addWidget(self._low_stock_frame, 0, 0)
         self._bottom_grid.addWidget(self._top_frame, 0, 1)
 
-        self._profit_frame = self._build_panel("📈  Courbe de gain")
+        self._profit_frame = self._build_panel("Courbe de gain")
         self._profit_title_lbl = self._profit_frame.layout().itemAt(0).widget()
 
         profit_period_row = QHBoxLayout()
         profit_period_row.setSpacing(8)
         profit_period_row.addStretch()
+
+        # "Avec crédit" includes every payment received, including deposits
+        # and later repayments on a customer's credit balance (today's full
+        # formula, unchanged). "Sans crédit" only counts sales paid in full
+        # on the spot, so the owner can see what profit looks like without
+        # relying on the credit extended to customers.
+        for scope_key, scope_label in (("all", "Avec crédit"), ("non_credit", "Sans crédit")):
+            btn = QPushButton(scope_label)
+            btn.setCheckable(True)
+            btn.setFixedHeight(30)
+            btn.clicked.connect(lambda checked=False, key=scope_key: self._set_profit_credit_scope(key))
+            self._credit_scope_buttons[scope_key] = btn
+            profit_period_row.addWidget(btn)
+
+        profit_period_row.addSpacing(16)
 
         for period_key, period_label in (("day", "Jour"), ("month", "Mois"), ("year", "Année")):
             btn = QPushButton(period_label)
@@ -379,6 +465,14 @@ class DashboardView(QWidget):
         self._update_profit_period_buttons()
         self._refresh_profit_chart()
 
+    def _set_profit_credit_scope(self, scope: str) -> None:
+        scope = (scope or "all").strip().lower()
+        if scope not in {"all", "non_credit"}:
+            scope = "all"
+        self._profit_credit_scope = scope
+        self._update_profit_credit_buttons()
+        self._refresh_profit_chart()
+
     def _update_profit_period_buttons(self) -> None:
         for period, btn in self._profit_buttons.items():
             active = period == self._profit_period
@@ -394,14 +488,51 @@ class DashboardView(QWidget):
                     "background: #F8FAFC; color: #334155; border: 1px solid #CBD5E1; border-radius: 8px;"
                 )
 
+    def _update_profit_credit_buttons(self) -> None:
+        # "Sans crédit" is the default view and mirrors the curve's default
+        # blue; "Avec crédit" is flagged in red since it folds in money from
+        # the credit ledger (deposits/repayments) on top of the baseline.
+        active_colors = {
+            "all": "background: #DC2626; color: white; border: none;",
+            "non_credit": "background: #1D4ED8; color: white; border: none;",
+        }
+        for scope, btn in self._credit_scope_buttons.items():
+            active = scope == self._profit_credit_scope
+            btn.setChecked(active)
+            if active:
+                btn.setStyleSheet(
+                    f"font-size: 11px; font-weight: 800; padding: 0 12px; border-radius: 8px; {active_colors[scope]}"
+                )
+            else:
+                btn.setStyleSheet(
+                    "font-size: 11px; font-weight: 700; padding: 0 12px;"
+                    "background: #F8FAFC; color: #334155; border: 1px solid #CBD5E1; border-radius: 8px;"
+                )
+
     def _refresh_profit_chart(self) -> None:
         labels = {
-            "day": "📈  Courbe de gain net par jour",
-            "month": "📈  Courbe de gain net par mois",
-            "year": "📈  Courbe de gain net par année",
+            "day": "Courbe de gain net par jour",
+            "month": "Courbe de gain net par mois",
+            "year": "Courbe de gain net par année",
         }
-        self._profit_title_lbl.setText(labels.get(self._profit_period, labels["day"]))
-        self._profit_chart.set_data(SaleController.get_profit_series(self._profit_period))
+        title = labels.get(self._profit_period, labels["day"])
+        note = (
+            "Marge encaissée moins toutes les dépenses (les dépenses récurrentes "
+            "sont comptées à chaque échéance)"
+        )
+        if self._profit_credit_scope == "all":
+            title += " — avec crédit client"
+            note += " — inclut les dépôts et règlements de crédit client en plus des ventes payées sur place."
+        self._profit_title_lbl.setText(title)
+        self._profit_note_lbl.setText(note)
+
+        if self._profit_credit_scope == "all":
+            line_color, point_color = "#DC2626", "#991B1B"
+        else:
+            line_color, point_color = "#1D4ED8", "#1E3A8A"
+
+        series = SaleController.get_profit_series(self._profit_period, self._profit_credit_scope)
+        self._profit_chart.set_data(series, line_color=line_color, point_color=point_color)
 
     def refresh(self):
         from datetime import datetime
@@ -409,6 +540,7 @@ class DashboardView(QWidget):
         now = datetime.now()
         self._date_lbl.setText(now.strftime("%A %d %B %Y  %H:%M"))
         self._update_profit_period_buttons()
+        self._update_profit_credit_buttons()
 
         _today = today_str()
         month_start = first_day_of_month()
@@ -439,7 +571,7 @@ class DashboardView(QWidget):
         self._clear_layout(self._low_stock_layout)
         low = ProductController.get_low_stock()
         if not low:
-            lbl = QLabel("Aucun produit en stock faible ✓")
+            lbl = QLabel("Aucun produit en stock faible")
             lbl.setStyleSheet("color: #059669; padding: 8px;")
             self._low_stock_layout.addWidget(lbl)
         for product in low:

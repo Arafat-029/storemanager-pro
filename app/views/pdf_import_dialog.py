@@ -14,6 +14,7 @@ from PySide6.QtGui import QColor, QFont
 from app.controllers.product_controller import ProductController
 from app.controllers.category_controller import CategoryController
 from app.database.connection import db
+from app.views.widgets.screen_fit import clamp_min_size
 
 
 # ── Background worker ─────────────────────────────────────────────
@@ -51,7 +52,7 @@ class PDFImportDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Importer depuis un catalogue PDF")
-        self.setMinimumSize(1000, 680)
+        clamp_min_size(self, 1000, 680)
         self._categories: dict[str, int] = {}
         self._existing_barcodes: set[str] = set()
         self._worker: _ParseWorker | None = None
@@ -73,7 +74,7 @@ class PDFImportDialog(QDialog):
         header.setFixedHeight(72)
         h_lay = QHBoxLayout(header)
         h_lay.setContentsMargins(24, 0, 24, 0)
-        title = QLabel("📋  Importer des produits depuis un catalogue PDF")
+        title = QLabel("Importer des produits depuis un catalogue PDF")
         title.setStyleSheet("color: white; font-size: 17px; font-weight: 700; background: transparent;")
         h_lay.addWidget(title)
 
@@ -89,12 +90,12 @@ class PDFImportDialog(QDialog):
         self._file_lbl = QLabel("Aucun fichier sélectionné")
         self._file_lbl.setStyleSheet("color: #6B7280; font-size: 13px;")
 
-        btn_pick = QPushButton("📂  Choisir un PDF")
+        btn_pick = QPushButton("Choisir un PDF")
         btn_pick.setFixedHeight(38)
         btn_pick.setMinimumWidth(160)
         btn_pick.clicked.connect(self._pick_file)
 
-        self._parse_btn = QPushButton("🔍  Analyser")
+        self._parse_btn = QPushButton("Analyser")
         self._parse_btn.setFixedHeight(38)
         self._parse_btn.setMinimumWidth(120)
         self._parse_btn.setEnabled(False)
@@ -146,17 +147,17 @@ class PDFImportDialog(QDialog):
         br_lay.setContentsMargins(20, 14, 20, 14)
         br_lay.setSpacing(10)
 
-        btn_all = QPushButton("✓  Tout sélectionner")
+        btn_all = QPushButton("Tout sélectionner")
         btn_all.setObjectName("btnSecondary")
         btn_all.setFixedHeight(36)
         btn_all.clicked.connect(lambda: self._set_all_checked(True))
 
-        btn_none = QPushButton("✗  Tout désélectionner")
+        btn_none = QPushButton("Tout désélectionner")
         btn_none.setObjectName("btnSecondary")
         btn_none.setFixedHeight(36)
         btn_none.clicked.connect(lambda: self._set_all_checked(False))
 
-        btn_skip_dup = QPushButton("⚠ Ignorer les doublons")
+        btn_skip_dup = QPushButton("Ignorer les doublons")
         btn_skip_dup.setObjectName("btnSecondary")
         btn_skip_dup.setFixedHeight(36)
         btn_skip_dup.clicked.connect(self._uncheck_duplicates)
@@ -166,7 +167,7 @@ class PDFImportDialog(QDialog):
         btn_cancel.setFixedHeight(38)
         btn_cancel.clicked.connect(self.reject)
 
-        self._import_btn = QPushButton("💾  Importer la sélection")
+        self._import_btn = QPushButton("Importer la sélection")
         self._import_btn.setFixedHeight(38)
         self._import_btn.setMinimumWidth(200)
         self._import_btn.setEnabled(False)
@@ -288,10 +289,10 @@ class PDFImportDialog(QDialog):
 
             # Status
             if is_dup:
-                status = QTableWidgetItem("⚠ Déjà en base")
+                status = QTableWidgetItem("Déjà en base")
                 status.setForeground(QColor("#D97706"))
             else:
-                status = QTableWidgetItem("✓ Nouveau")
+                status = QTableWidgetItem("Nouveau")
                 status.setForeground(QColor("#059669"))
             status.setFlags(status.flags() & ~Qt.ItemIsEditable)
             self._table.setItem(row, _C_STATUS, status)
@@ -380,6 +381,6 @@ class PDFImportDialog(QDialog):
             msg += f"\n{errors} erreur(s) (doublons de code-barres ignorés)."
 
         QMessageBox.information(self, "Import terminé", msg)
-        self._summary.setText(f"✓ {ok} produit(s) importé(s). {errors} erreur(s).")
+        self._summary.setText(f"{ok} produit(s) importé(s). {errors} erreur(s).")
         self._import_btn.setEnabled(False)
         self.accept()

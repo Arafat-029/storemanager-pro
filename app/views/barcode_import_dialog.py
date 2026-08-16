@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt, Signal, QTimer
 
 from app.controllers.product_controller import ProductController
 from app.utils.barcode_scanner import BarcodeScannerDialog, SCANNER_AVAILABLE
+from app.views.widgets.screen_fit import clamp_min_size
 
 
 class _ScannedRow(QFrame):
@@ -44,7 +45,7 @@ class _ScannedRow(QFrame):
         row.setContentsMargins(14, 8, 10, 8)
         row.setSpacing(12)
 
-        icon = QLabel("❌" if self._product is None else "✅")
+        icon = QLabel("")
         icon.setFixedWidth(22)
         icon.setStyleSheet("background: transparent; border: none; font-size: 17px;")
         row.addWidget(icon)
@@ -82,7 +83,7 @@ class _ScannedRow(QFrame):
             btn_create.clicked.connect(lambda: self.create_requested.emit(self._barcode))
             row.addWidget(btn_create)
 
-        btn_del = QPushButton("🗑")
+        btn_del = QPushButton("×")
         btn_del.setFixedSize(30, 30)
         btn_del.setStyleSheet(
             "QPushButton { background: transparent; color: #9CA3AF;"
@@ -99,7 +100,7 @@ class BarcodeBatchImportDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Scan codes-barres produits")
-        self.setMinimumSize(660, 560)
+        clamp_min_size(self, 660, 560)
         self._rows: list[_ScannedRow] = []
         self._scanned_codes: set[str] = set()
         self._build_ui()
@@ -118,7 +119,7 @@ class BarcodeBatchImportDialog(QDialog):
         hdr.setFixedHeight(52)
         hl = QHBoxLayout(hdr)
         hl.setContentsMargins(20, 0, 20, 0)
-        title_lbl = QLabel("📷  Scan lot codes-barres / QR codes")
+        title_lbl = QLabel("Scan lot codes-barres / QR codes")
         title_lbl.setStyleSheet(
             "font-size: 15px; font-weight: 700; color: white;"
             "background: transparent; border: none;"
@@ -157,7 +158,7 @@ class BarcodeBatchImportDialog(QDialog):
         self._code_input.returnPressed.connect(self._add_manual)
         il.addWidget(self._code_input, 1)
 
-        btn_scan = QPushButton("📷  Scanner")
+        btn_scan = QPushButton("Scanner")
         btn_scan.setMinimumHeight(40)
         btn_scan.setEnabled(SCANNER_AVAILABLE)
         if not SCANNER_AVAILABLE:
@@ -182,11 +183,11 @@ class BarcodeBatchImportDialog(QDialog):
         ll.setContentsMargins(16, 6, 16, 6)
         ll.setSpacing(20)
 
-        lbl_ok = QLabel("✅  Produit trouvé en base")
+        lbl_ok = QLabel("Produit trouvé en base")
         lbl_ok.setStyleSheet(
             "font-size: 11px; color: #059669; background: transparent; border: none;"
         )
-        lbl_nok = QLabel("❌  Inconnu — cadre rouge — cliquer ＋ pour créer")
+        lbl_nok = QLabel("Inconnu — cadre rouge — cliquer ＋ pour créer")
         lbl_nok.setStyleSheet(
             "font-size: 11px; color: #DC2626; background: transparent; border: none;"
         )
@@ -233,7 +234,7 @@ class BarcodeBatchImportDialog(QDialog):
             "color: #6B7280; font-size: 12px; background: transparent; border: none;"
         )
 
-        btn_clear = QPushButton("🗑  Effacer tout")
+        btn_clear = QPushButton("Effacer tout")
         btn_clear.setObjectName("btnDanger")
         btn_clear.setFixedHeight(38)
         btn_clear.clicked.connect(self._clear_all)

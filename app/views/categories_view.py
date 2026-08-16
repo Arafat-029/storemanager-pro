@@ -40,10 +40,10 @@ class CategoriesView(QWidget):
         layout.addWidget(self._table, 1)
 
         btn_row = QHBoxLayout()
-        btn_edit = QPushButton("✏️  Modifier")
+        btn_edit = QPushButton("Modifier")
         btn_edit.setObjectName("btnSecondary")
         btn_edit.clicked.connect(self._edit)
-        btn_del = QPushButton("🗑️  Supprimer")
+        btn_del = QPushButton("Supprimer")
         btn_del.setObjectName("btnDanger")
         btn_del.clicked.connect(self._delete)
         btn_row.addStretch()
@@ -55,7 +55,7 @@ class CategoriesView(QWidget):
         cats = CategoryController.get_all()
         rows = []
         for c in cats:
-            rows.append({**c, "_img_flag": "✅" if c.get("image_path") else "—"})
+            rows.append({**c, "_img_flag": "Oui" if c.get("image_path") else "—"})
         self._table.set_data(rows, ["id", "name", "description", "color", "_img_flag"])
         self._limit_table_height(len(rows))
 
@@ -142,7 +142,7 @@ class CategoryDialog(QDialog):
         self._img_preview.setStyleSheet(
             "border: 2px dashed #D1D5DB; border-radius: 8px; background: #F9FAFB;"
         )
-        self._img_preview.setText("📷")
+        self._img_preview.setText("")
         self._img_preview.setStyleSheet(
             "QLabel { border: 2px dashed #D1D5DB; border-radius: 8px;"
             "background: #F9FAFB; font-size: 28px; }"
@@ -150,10 +150,10 @@ class CategoryDialog(QDialog):
 
         img_btns = QVBoxLayout()
         img_btns.setSpacing(6)
-        btn_pick_img = QPushButton("📂  Choisir image")
+        btn_pick_img = QPushButton("Choisir image")
         btn_pick_img.setObjectName("btnSecondary")
         btn_pick_img.clicked.connect(self._pick_image)
-        btn_clear_img = QPushButton("✕  Supprimer image")
+        btn_clear_img = QPushButton("Supprimer image")
         btn_clear_img.setObjectName("btnDanger")
         btn_clear_img.clicked.connect(self._clear_image)
         img_btns.addWidget(btn_pick_img)
@@ -193,7 +193,7 @@ class CategoryDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_save = QPushButton("💾  Enregistrer")
+        btn_save = QPushButton("Enregistrer")
         btn_save.clicked.connect(self._save)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)
@@ -240,7 +240,7 @@ class CategoryDialog(QDialog):
                 self._img_preview.setText("")
                 return
         self._img_preview.setPixmap(QPixmap())
-        self._img_preview.setText("📷")
+        self._img_preview.setText("")
 
     def _save(self):
         name = self._name.text().strip()

@@ -45,7 +45,7 @@
      </item>
      <item>
       <widget class="QPushButton" name="btnOk">
-       <property name="text"><string>✅  Valider</string></property>
+       <property name="text"><string>Valider</string></property>
       </widget>
      </item>
     </layout>

@@ -21,3 +21,6 @@ data/product_images/
 
 # Vignettes régénérées automatiquement à partir des images sources
 data/cache/
+
+# Journaux d'erreurs générés à l'exécution
+data/logs/

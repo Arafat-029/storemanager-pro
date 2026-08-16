@@ -39,13 +39,13 @@
      <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property></spacer></item>
      <item>
       <widget class="QPushButton" name="btnEdit">
-       <property name="text"><string>✏️  Modifier</string></property>
+       <property name="text"><string>Modifier</string></property>
        <property name="cssClass" stdset="0"><string>btnSecondary</string></property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="btnDelete">
-       <property name="text"><string>🗑️  Supprimer</string></property>
+       <property name="text"><string>Supprimer</string></property>
        <property name="cssClass" stdset="0"><string>btnDanger</string></property>
       </widget>
      </item>

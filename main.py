@@ -21,6 +21,7 @@ from app.database.connection import db
 from app.views.login_dialog import LoginDialog
 from app.views.main_window import MainWindow
 from app.views.widgets.form_behavior import install_form_field_guard
+from app.utils import crash_handler
 
 
 def _load_selected_theme(app: QApplication) -> None:
@@ -34,11 +35,22 @@ def _load_selected_theme(app: QApplication) -> None:
 
 
 def main():
+    # Qt6 keeps per-monitor DPI scaling on by default (correct for touch
+    # targets on high-density POS screens), but its default rounding policy
+    # snaps fractional factors (125%, 150%...) to the nearest integer. That's
+    # harmless on one screen, but across two monitors running different
+    # scale factors (e.g. a 125% laptop panel next to a 100% external
+    # display) it makes the same logical size drift out of sync between
+    # them. PassThrough applies the exact factor on each screen instead.
+    QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
-    app.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-    app.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+
+    # Filet de sécurité : une erreur imprévue est journalisée et expliquée au
+    # caissier, au lieu de disparaître en silence ou de fermer la caisse.
+    crash_handler.install(app)
 
     import platform
     font_family = "Segoe UI" if platform.system() == "Windows" else (

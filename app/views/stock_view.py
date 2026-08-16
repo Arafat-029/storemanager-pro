@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt
 
 from app.views.widgets.data_table import DataTable
 from app.views.widgets.search_bar import SearchBar
-from app.views.widgets.price_input import PriceSpinBox
+from app.views.widgets.quantity_input import QuantitySpinBox
 from app.controllers.stock_controller import StockController, LOSS_REASONS, LOSS_REASON_LABELS
 from app.controllers.product_controller import ProductController
 from app.utils.helpers import format_datetime, format_price
@@ -55,26 +55,28 @@ class StockView(QWidget):
         self._inv_frame = QFrame()
         self._inv_frame.setObjectName("statCard")
         inv_row = QHBoxLayout(self._inv_frame)
+        inv_row.setContentsMargins(20, 12, 20, 12)
+        inv_row.setSpacing(32)
         self._lbl_purchase = QLabel()
         self._lbl_sale = QLabel()
         self._lbl_count = QLabel()
         for lbl in [self._lbl_purchase, self._lbl_sale, self._lbl_count]:
-            lbl.setAlignment(Qt.AlignCenter)
-            lbl.setStyleSheet("font-size: 14px;")
-            inv_row.addWidget(lbl, 1)
-        layout.addWidget(self._inv_frame)
+            lbl.setStyleSheet("font-size: 13px;")
+            inv_row.addWidget(lbl)
+        inv_row.addStretch()
+        layout.addWidget(self._inv_frame, 0, Qt.AlignLeft)
 
         toolbar = QHBoxLayout()
-        self._search = SearchBar("🔍  Rechercher un produit...")
+        self._search = SearchBar("Rechercher un produit...")
         self._search.setMinimumHeight(42)
         self._search.search_changed.connect(self._filter_movements)
 
-        btn_scan = QPushButton("📄  Ajout facture")
+        btn_scan = QPushButton("Ajout facture")
         btn_scan.setObjectName("btnWarning")
         btn_scan.setMinimumHeight(42)
         btn_scan.clicked.connect(self._open_invoice_scan)
 
-        btn_loss = QPushButton("🗑️  Déclarer une perte")
+        btn_loss = QPushButton("Déclarer une perte")
         btn_loss.setObjectName("btnDanger")
         btn_loss.setMinimumHeight(42)
         btn_loss.setToolTip("Retirer du stock un produit cassé, périmé, détruit ou perdu")
@@ -103,7 +105,7 @@ class StockView(QWidget):
 
     def _load_movements(self, product_id: int = None):
         movements = StockController.get_movements(product_id)
-        type_labels = {"in": "✅ Entrée", "out": "📤 Sortie", "adjustment": "⚙️ Ajustement", "return": "↩️ Retour"}
+        type_labels = {"in": "Entrée", "out": "Sortie", "adjustment": "Ajustement", "return": "Retour"}
         display = []
         for m in movements:
             d = dict(m)
@@ -112,7 +114,7 @@ class StockView(QWidget):
             # it as its own kind so it is not read as a sale.
             loss_reason = m.get("loss_reason")
             if loss_reason:
-                d["movement_type"] = f"🗑️ Perte — {LOSS_REASON_LABELS.get(loss_reason, loss_reason)}"
+                d["movement_type"] = f"Perte — {LOSS_REASON_LABELS.get(loss_reason, loss_reason)}"
             else:
                 d["movement_type"] = type_labels.get(m["movement_type"], m["movement_type"])
             d["quantity"] = f"{m['quantity']:.3f}"
@@ -122,13 +124,16 @@ class StockView(QWidget):
 
 
     def _limit_table_height(self, total_rows: int):
-        visible_rows = max(1, min(int(total_rows), 10))
+        # Only enforce a floor (so a near-empty table doesn't look collapsed);
+        # no ceiling, so the table's own stretch factor lets it fill whatever
+        # vertical space the window actually has instead of leaving a blank
+        # gap below it once the row count stops growing.
+        visible_rows = max(1, min(int(total_rows), 3))
         header_h = self._table.horizontalHeader().height() or 36
         row_h = 48
         frame_h = 12
-        target_h = header_h + (visible_rows * row_h) + frame_h
-        self._table.setMinimumHeight(target_h)
-        self._table.setMaximumHeight(target_h)
+        min_h = header_h + (visible_rows * row_h) + frame_h
+        self._table.setMinimumHeight(min_h)
 
     def _filter_movements(self, text: str):
         if not text:
@@ -198,10 +203,12 @@ class StockAdjustDialog(QDialog):
         self._product_combo.currentIndexChanged.connect(self._update_current)
 
         self._current_lbl = QLabel()
-        self._new_qty = PriceSpinBox()
+        self._new_qty = QuantitySpinBox()
         self._new_qty.setMinimumHeight(42)
         self._new_qty.setMaximum(999999)
         self._new_qty.setDecimals(3)
+        if le := self._new_qty.lineEdit():
+            le.setPlaceholderText("0.000")
 
         self._notes = QLineEdit()
         self._notes.setMinimumHeight(42)
@@ -218,7 +225,7 @@ class StockAdjustDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("✅  Confirmer")
+        btn_ok = QPushButton("Confirmer")
         btn_ok.clicked.connect(self._confirm)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)
@@ -256,11 +263,13 @@ class StockEntryDialog(QDialog):
             supplier = f" — {p['supplier_name']}" if p.get("supplier_name") else ""
             self._product_combo.addItem(f"{p['name']}{supplier}", p["id"])
 
-        self._qty = PriceSpinBox()
+        self._qty = QuantitySpinBox()
         self._qty.setMinimumHeight(42)
         self._qty.setMinimum(0.001)
         self._qty.setMaximum(99999)
         self._qty.setDecimals(3)
+        if le := self._qty.lineEdit():
+            le.setPlaceholderText("0.000")
         self._qty.setValue(1)
 
         self._ref = QLineEdit()
@@ -280,7 +289,7 @@ class StockEntryDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("✅  Confirmer")
+        btn_ok = QPushButton("Confirmer")
         btn_ok.setObjectName("btnSuccess")
         btn_ok.clicked.connect(self._confirm)
         btn_row.addStretch()
@@ -326,11 +335,13 @@ class StockLossDialog(QDialog):
             self._product_combo.addItem(f"{p['name']}", p["id"])
         self._product_combo.currentIndexChanged.connect(self._update_stock_label)
 
-        self._qty = PriceSpinBox()
+        self._qty = QuantitySpinBox()
         self._qty.setMinimumHeight(42)
         self._qty.setMinimum(0.001)
         self._qty.setMaximum(99999)
         self._qty.setDecimals(3)
+        if le := self._qty.lineEdit():
+            le.setPlaceholderText("0.000")
         self._qty.setValue(1)
 
         self._reason = QComboBox()
@@ -356,7 +367,7 @@ class StockLossDialog(QDialog):
         btn_cancel = QPushButton("Annuler")
         btn_cancel.setObjectName("btnSecondary")
         btn_cancel.clicked.connect(self.reject)
-        btn_ok = QPushButton("🗑️  Retirer du stock")
+        btn_ok = QPushButton("Retirer du stock")
         btn_ok.setObjectName("btnDanger")
         btn_ok.clicked.connect(self._confirm)
         btn_row.addStretch()
