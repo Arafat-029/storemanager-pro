@@ -212,17 +212,13 @@ faut la relancer.
 
 ## Créer un raccourci sur le Bureau
 
-Pour éviter de passer par PowerShell tous les jours, créer un fichier
-`lancer.bat` à la racine du projet :
+Le fichier **`lancer.bat`** est fourni à la racine du projet : il active
+l'environnement Python et démarre l'application en un double-clic.
 
-```bat
-@echo off
-cd /d "%~dp0"
-call .venv\Scripts\activate.bat
-python main.py
-```
+Clic droit sur `lancer.bat` → *Envoyer vers* → *Bureau (créer un raccourci)*.
 
-Puis : clic droit sur `lancer.bat` → *Envoyer vers* → *Bureau (créer un raccourci)*.
+Les jours suivants, un double-clic sur ce raccourci suffit — plus besoin de
+PowerShell.
 
 ---
 

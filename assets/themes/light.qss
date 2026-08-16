@@ -551,18 +551,22 @@ QPushButton#cartClearBtn:disabled {
 #cartItemDetails { font-size: 11px; font-weight: 600; color: #94A3B8; }
 #cartItemQty     { font-size: 12px; font-weight: 800; color: #111827; }
 
+/* Quantité de la ligne panier : ouvre le clavier numérique. Dessinée comme
+   un champ de saisie (fond clair, bordure marquée) et non comme un bouton
+   d'action, pour qu'on comprenne qu'on peut la modifier. */
 QPushButton#cartQtyBtn {
-    background: #F1F5F9;
-    border: 1px solid #E2E8F0;
+    background: #FFFFFF;
+    border: 1.5px solid #CBD5E1;
     border-radius: 8px;
-    color: #334155;
-    font-size: 14px;
+    color: #0F172A;
+    font-size: 15px;
     font-weight: 800;
-    padding: 0;
+    padding: 0 10px;
     min-height: 42px;
     max-height: 42px;
 }
-QPushButton#cartQtyBtn:hover { background: #E2E8F0; }
+QPushButton#cartQtyBtn:hover   { border-color: #059669; color: #059669; background: #F0FDF4; }
+QPushButton#cartQtyBtn:pressed { background: #ECFDF5; }
 QPushButton#cartRemoveBtn {
     background: #FEE2E2;
     border: none;

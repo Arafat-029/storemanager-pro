@@ -22,6 +22,7 @@ from app.utils.exporter import generate_thermal_receipt
 from app.views.widgets.price_input import PriceSpinBox
 from app.views.widgets.quantity_input import QuantitySpinBox
 from app.views.widgets.screen_fit import clamp_min_size
+from app.views.widgets.quantity_keypad import ask_quantity
 from app.utils.barcode_scanner import BarcodeScannerDialog, SCANNER_AVAILABLE
 from app.views.dialog_theme import (
     apply_dialog_theme,
@@ -71,6 +72,10 @@ _CART_ROW_ITEM_EXTRA = 0
 _CART_LIST_SPACING = 8
 _CART_VISIBLE_ROWS = 4
 _CART_SCROLL_MIN_ROWS = 4
+
+# Unité affichée à côté d'une quantité (clavier de saisie, libellés panier).
+_UNIT_LABELS = {"piece": "pcs", "kg": "kg", "litre": "L"}
+
 
 def _format_quantity(value: float, unit_type: str) -> str:
     if unit_type == "piece" and abs(value - round(value)) < 0.001:
@@ -1778,78 +1783,77 @@ class POSView(QWidget):
         details_lbl.setToolTip(details_text)
         bottom_row.addWidget(details_lbl, 1)
 
-        if item.get("pricing_mode") == "gram":
-            delta_m = -0.1
-            delta_p = 0.1
-        else:
-            delta_m = -1 if item["unit_type"] == "piece" else -0.1
-            delta_p = 1 if item["unit_type"] == "piece" else 0.1
-
-        def _make_step_button(text: str, delta: float) -> QPushButton:
-            btn = QPushButton(text)
-            btn.setObjectName("cartQtyBtn")
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.setFixedWidth(_TOUCH_MIN)
-            btn.clicked.connect(lambda _, i=idx, d=delta: self._change_qty(i, d))
-            return btn
-
-        bottom_row.addWidget(_make_step_button("−", delta_m), 0)
-
+        # La quantité s'ouvre au clavier numérique plutôt qu'en incréments :
+        # passer de 1 à 12 demandait onze appuis sur « + ».
         qty_text = _cart_quantity_text(item)
-        qty_lbl = QLabel(qty_text)
-        qty_lbl.setObjectName("cartItemQty")
-        qty_lbl.setAlignment(Qt.AlignCenter)
-        qty_lbl.setMinimumWidth(42)
-        qty_lbl.setToolTip(qty_text)
-        bottom_row.addWidget(qty_lbl, 0)
+        qty_btn = QPushButton(qty_text)
+        qty_btn.setObjectName("cartQtyBtn")
+        qty_btn.setCursor(Qt.PointingHandCursor)
+        qty_btn.setMinimumWidth(96)
+        qty_btn.setToolTip("Appuyer pour saisir la quantité")
+        qty_btn.clicked.connect(lambda _, i=idx: self._edit_quantity(i))
+        bottom_row.addWidget(qty_btn, 0)
 
-        bottom_row.addWidget(_make_step_button("+", delta_p), 0)
         bottom_row.addWidget(_make_remove_button(), 0)
 
         outer.addLayout(bottom_row)
 
         return frame
 
-    def _change_qty(self, idx: int, delta: float):
+    def _edit_quantity(self, idx: int):
+        """Saisie directe de la quantité d'une ligne, au clavier numérique."""
         if idx < 0 or idx >= len(self._cart):
             return
 
         item = self._cart[idx]
-        new_qty = round(float(item.get("quantity", 0)) + float(delta), 3)
-
-        if item.get("pricing_mode") == "gram":
-            current_weight = int(item.get("display_weight_g") or _grams_from_quantity(item.get("quantity", 0)))
-            new_weight = current_weight + int(round(delta * 1000))
-            if new_weight <= 0 or new_qty <= 0:
-                self._cart.pop(idx)
-                self._render_cart()
-                return
-            if new_qty > float(item.get("stock", 0)):
-                light_warning(self, "Stock insuffisant", f"Stock disponible : {float(item.get('stock', 0)):.3f}")
-                return
-            item["quantity"] = new_qty
-            item["display_weight_g"] = new_weight
-            self._render_cart()
-            return
-
-        if new_qty <= 0:
-            self._cart.pop(idx)
-            self._render_cart()
-            return
-
-        stock_required = round(float(new_qty) * float(item.get("stock_quantity_per_unit", 1.0)), 3)
-        total_required = round(
-            self._cart_stock_usage_for_product(int(item.get("product_id") or 0), exclude_index=idx) + stock_required,
-            3,
+        is_gram = item.get("pricing_mode") == "gram"
+        stock = float(item.get("stock", 0) or 0)
+        # Ce que les AUTRES lignes du même produit consomment déjà : le
+        # plafond proposé ici est ce qui reste réellement disponible.
+        used_elsewhere = self._cart_stock_usage_for_product(
+            int(item.get("product_id") or 0), exclude_index=idx
         )
-        if total_required > float(item.get("stock", 0)) + 0.0005:
-            light_warning(self, "Stock insuffisant", f"Stock disponible : {float(item.get('stock', 0)):.3f}")
+        remaining_stock = max(0.0, round(stock - used_elsewhere, 3))
+
+        if is_gram:
+            current_g = item.get("display_weight_g")
+            if current_g is None:
+                current_g = _grams_from_quantity(item.get("quantity", 0))
+            maximum = round(remaining_stock * 1000)
+            unit_label, allow_decimals, initial = "g", False, int(current_g)
+        else:
+            per_unit = float(item.get("stock_quantity_per_unit", 1.0) or 1.0)
+            is_piece = item.get("unit_type") == "piece"
+            # Le plafond s'exprime dans l'unité de vente affichée : pour un
+            # pack de 6, 12 pièces en stock font 2 packs, pas 12.
+            maximum = round(remaining_stock / per_unit, 3) if per_unit else remaining_stock
+            unit_label = _UNIT_LABELS.get(item.get("unit_type", "piece"), "pcs")
+            allow_decimals = not is_piece
+            initial = item.get("quantity", 0)
+            if is_piece:
+                maximum = int(maximum)
+                initial = int(round(float(initial)))
+
+        new_value = ask_quantity(
+            self,
+            item.get("name") or "Produit",
+            unit_label,
+            allow_decimals=allow_decimals,
+            initial=initial,
+            maximum=maximum,
+        )
+        if new_value is None:
             return
 
-        if item.get("unit_type") == "piece":
-            item["quantity"] = int(round(new_qty))
+        if is_gram:
+            grams = int(round(new_value))
+            item["quantity"] = round(grams / 1000.0, 3)
+            item["display_weight_g"] = grams
+        elif item.get("unit_type") == "piece":
+            item["quantity"] = int(round(new_value))
         else:
-            item["quantity"] = new_qty
+            item["quantity"] = round(new_value, 3)
+
         self._render_cart()
 
     def _remove_item(self, idx: int):
@@ -2212,22 +2216,21 @@ class SaleUnitDialog(QDialog):
             self._unit.addItem(unit_label, unit)
         self._unit.currentIndexChanged.connect(self._update_total)
 
-        self._qty = QDoubleSpinBox()
-        self._qty.setMinimumHeight(42)
-        self._qty.setMinimum(1.0 if product.get("unit_type") == "piece" else 0.001)
-        self._qty.setMaximum(9999.0)
-        if product.get("unit_type") == "piece":
-            self._qty.setDecimals(0)
-            self._qty.setValue(1.0)
-        else:
-            self._qty.setDecimals(3)
-            self._qty.setSingleStep(0.001)
-            self._qty.setValue(1.0)
-        self._qty.valueChanged.connect(self._update_total)
+        # Quantité au clavier numérique plutôt qu'en spinbox : les flèches
+        # natives sont trop petites pour un écran tactile, et le propriétaire
+        # ne veut plus d'incréments — on saisit la valeur directement.
+        self._quantity = 1.0
+        self._qty_btn = QPushButton()
+        self._qty_btn.setObjectName("cartQtyBtn")
+        self._qty_btn.setMinimumHeight(46)
+        self._qty_btn.setCursor(Qt.PointingHandCursor)
+        self._qty_btn.setToolTip("Appuyer pour saisir la quantité")
+        self._qty_btn.clicked.connect(self._ask_quantity)
 
         form.addRow("Unité :", self._unit)
-        form.addRow("Quantité :", self._qty)
+        form.addRow("Quantité :", self._qty_btn)
         layout.addLayout(form)
+        self._refresh_qty_button()
 
         self._total_lbl = QLabel()
         self._total_lbl.setAlignment(Qt.AlignCenter)
@@ -2252,9 +2255,42 @@ class SaleUnitDialog(QDialog):
         data = self._unit.currentData()
         return data if isinstance(data, dict) else None
 
+    def _is_piece(self) -> bool:
+        return self._product.get("unit_type") == "piece"
+
+    def _refresh_qty_button(self) -> None:
+        unit_label = _UNIT_LABELS.get(self._product.get("unit_type", "piece"), "pcs")
+        quantity = self._current_quantity()
+        shown = str(int(quantity)) if self._is_piece() else f"{quantity:.3f}"
+        self._qty_btn.setText(f"{shown}  {unit_label}")
+
+    def _ask_quantity(self) -> None:
+        unit = self._current_unit() or {}
+        per_unit = float(unit.get("quantity") or 1.0)
+        stock = float(self._product.get("stock_quantity") or 0.0)
+        # Plafond exprimé dans l'unité choisie : un pack de 6 pour 12 pièces
+        # en stock, c'est 2 packs maximum.
+        maximum = round(stock / per_unit, 3) if per_unit else stock
+        if self._is_piece():
+            maximum = int(maximum)
+
+        value = ask_quantity(
+            self,
+            self._product.get("name") or "Produit",
+            _UNIT_LABELS.get(self._product.get("unit_type", "piece"), "pcs"),
+            allow_decimals=not self._is_piece(),
+            initial=self._current_quantity(),
+            maximum=maximum,
+        )
+        if value is None:
+            return
+        self._quantity = value
+        self._refresh_qty_button()
+        self._update_total()
+
     def _current_quantity(self) -> float:
-        value = float(self._qty.value())
-        if self._product.get("unit_type") == "piece":
+        value = float(self._quantity)
+        if self._is_piece():
             return float(max(1, int(round(value))))
         return max(0.001, round(value, 3))
 

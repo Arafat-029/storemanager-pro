@@ -361,12 +361,14 @@ QPushButton#cartClearBtn:disabled {
 #cartItemDetails { font-size: 11px; font-weight: 600; color: #64748B; }
 #cartItemQty     { font-size: 12px; font-weight: 800; color: #E2E8F0; }
 
+/* Voir light.qss : dessinée comme un champ de saisie, pas comme un bouton. */
 QPushButton#cartQtyBtn {
-    background: #0A1222; border: 1px solid #1A2744; border-radius: 8px;
-    color: #CBD5E1; font-size: 14px; font-weight: 800; padding: 0;
+    background: #111B2E; border: 1.5px solid #334155; border-radius: 8px;
+    color: #F8FAFC; font-size: 15px; font-weight: 800; padding: 0 10px;
     min-height: 42px; max-height: 42px;
 }
-QPushButton#cartQtyBtn:hover { background: #142238; }
+QPushButton#cartQtyBtn:hover   { border-color: #34D399; color: #34D399; background: #152238; }
+QPushButton#cartQtyBtn:pressed { background: #0A1222; }
 QPushButton#cartRemoveBtn {
     background: rgba(233, 30, 99, 0.16); border: none; border-radius: 8px;
     color: #F87171; font-size: 14px; font-weight: 800; padding: 0;
