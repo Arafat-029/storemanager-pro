@@ -26,12 +26,37 @@ class CategoriesView(QWidget):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
-        toolbar = QHBoxLayout()
+        # Même structure que Fournisseurs et Clients : un titre ancre la
+        # rangée à gauche, recherche et bouton l'ancrent à droite. C'est
+        # l'absence de titre qui faisait flotter le bouton seul au milieu
+        # d'un bandeau vide, très visible sur grand écran.
+        header = QHBoxLayout()
+        header.setSpacing(10)
+
+        title = QLabel("Gestion des catégories")
+        title.setStyleSheet("font-size: 20px; font-weight: 700; color: #111827;")
+
+        self._search = QLineEdit()
+        self._search.setPlaceholderText("Rechercher une catégorie…")
+        self._search.setMinimumHeight(40)
+        self._search.setMaximumWidth(320)
+        self._search.textChanged.connect(self.refresh)
+
         btn_add = QPushButton("＋  Nouvelle catégorie")
+        btn_add.setMinimumHeight(40)
         btn_add.clicked.connect(self._add)
-        toolbar.addStretch()
-        toolbar.addWidget(btn_add)
-        layout.addLayout(toolbar)
+
+        # Le compteur tient dans la rangée du titre, en discret : un bandeau
+        # pleine largeur pour trois mots mangeait une ligne entière pour rien.
+        self._count_lbl = QLabel()
+        self._count_lbl.setStyleSheet("color: #6B7280; font-size: 13px;")
+
+        header.addWidget(title)
+        header.addWidget(self._count_lbl)
+        header.addStretch()
+        header.addWidget(self._search)
+        header.addWidget(btn_add)
+        layout.addLayout(header)
 
         self._table = DataTable(["ID", "Nom", "Description", "Couleur", "Image"])
         self._table.itemDoubleClicked.connect(self._edit)
@@ -53,10 +78,21 @@ class CategoriesView(QWidget):
 
     def refresh(self):
         cats = CategoryController.get_all()
-        rows = []
-        for c in cats:
-            rows.append({**c, "_img_flag": "Oui" if c.get("image_path") else "—"})
+        total = len(cats)
+
+        query = self._search.text().strip().lower()
+        if query:
+            cats = [
+                c for c in cats
+                if query in (c.get("name") or "").lower()
+                or query in (c.get("description") or "").lower()
+            ]
+
+        rows = [{**c, "_img_flag": "Oui" if c.get("image_path") else "—"} for c in cats]
         self._table.set_data(rows, ["id", "name", "description", "color", "_img_flag"])
+        self._count_lbl.setText(
+            f"({len(rows)})" if not query else f"({len(rows)} sur {total})"
+        )
         self._limit_table_height(len(rows))
 
 

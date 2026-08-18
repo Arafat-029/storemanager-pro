@@ -441,7 +441,12 @@ class SaleController:
                     notes="Paiement immédiat",
                 )
 
-        AuthController.log("SALE_CREATE", f"Vente #{sale_id} | Total: {total:.3f} | Méthode: {payment_method}")
+        moyen = {
+            "cash": "payé en espèces",
+            "credit": "à crédit",
+            "card": "payé par carte",
+        }.get(payment_method, payment_method)
+        AuthController.log("SALE_CREATE", f"Vente #{sale_id} — {total:.3f} TND — {moyen}")
         return SaleController.get_by_id(sale_id)
 
     @staticmethod
@@ -935,33 +940,10 @@ class SaleController:
             return points[-int(days):]
         return points
 
-    @staticmethod
-    def get_cash_expected_today(date: str = None, opening_cash: float = 0.0, user_id: int | None = None) -> dict:
-        target_date = date or datetime.now().date().isoformat()
-        where_sql = [f"{db.date_only_expr('sp.created_at')} = ?"]
-        params: list = [target_date]
-
-        if user_id is not None:
-            where_sql.append("COALESCE(sp.receiver_user_id, s.user_id) = ?")
-            params.append(int(user_id))
-
-        received_row = db.fetchone(
-            f"""
-            SELECT COALESCE(SUM(sp.amount), 0) AS total_received
-            FROM sale_payments sp
-            JOIN sales s ON s.id = sp.sale_id
-            WHERE {' AND '.join(where_sql)}
-            """,
-            tuple(params),
-        ) or {"total_received": 0}
-        total_received = round(float(received_row.get("total_received") or 0.0), 3)
-        opening_cash = round(float(opening_cash or 0.0), 3)
-        return {
-            "date": target_date,
-            "opening_cash": opening_cash,
-            "total_received": total_received,
-            "expected_cash": round(opening_cash + total_received, 3),
-        }
+    # get_cash_expected_today a été retiré : il additionnait les
+    # encaissements de LA JOURNÉE, si bien que deux caissiers se succédant
+    # héritaient chacun de la caisse de l'autre. Voir
+    # CashSessionController.compute_expected, borné par session.
 
     @staticmethod
     def get_revenue_by_period(period: str = "day", days: int = 30) -> list[dict]:

@@ -463,9 +463,26 @@ def generate_thermal_receipt(sale: dict, store_info: dict) -> str:
     ))
     story.append(_paragraph(DDIV, sml))
 
+    # Hauteur ajustee au contenu, et non figee sur du A4 : une imprimante
+    # thermique deroule un rouleau continu, elle ne "tourne pas la page".
+    # Avec une hauteur A4 elle ejectait 30 cm de papier par ticket, quelle
+    # que soit la taille de la vente.
+    content_height = 0.0
+    for flowable in story:
+        try:
+            content_height += flowable.wrap(CW, A4[1])[1]
+        except Exception:
+            # Un element qui refuse de se mesurer ne doit pas empecher
+            # l'impression : on lui reserve une hauteur de ligne par defaut.
+            content_height += 12.0
+
+    # +18 pt de marge basse : de quoi degager la zone de coupe sans laisser
+    # un grand blanc. Borne haute a A4 par securite.
+    page_height = min(A4[1], content_height + (MARGIN * 2) + 18.0)
+
     doc = SimpleDocTemplate(
         str(path),
-        pagesize=(PW, A4[1]),
+        pagesize=(PW, page_height),
         rightMargin=MARGIN,
         leftMargin=MARGIN,
         topMargin=MARGIN,

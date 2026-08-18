@@ -24,3 +24,7 @@ data/cache/
 
 # Journaux d'erreurs générés à l'exécution
 data/logs/
+
+# Sauvegardes de la base : données du magasin + empreintes de mots de passe.
+# Ne doivent jamais être versionnées ni publiées sur un dépôt.
+data/backups/

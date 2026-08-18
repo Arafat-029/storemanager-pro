@@ -424,7 +424,7 @@ class ProductController:
             default_sale_price=float(data.get("sale_price", 0) or 0.0),
             unit_type=str(data.get("unit_type") or "piece"),
         )
-        AuthController.log("PRODUCT_CREATE", f"Produit créé: {data['name']} (id={product_id})")
+        AuthController.log("PRODUCT_CREATE", f"{data['name']}")
         if data.get("stock_quantity", 0) > 0:
             db.execute(
                 """
@@ -469,7 +469,7 @@ class ProductController:
             default_sale_price=float(data.get("sale_price", 0) or 0.0),
             unit_type=str(data.get("unit_type") or "piece"),
         )
-        AuthController.log("PRODUCT_UPDATE", f"Produit modifié: id={product_id}")
+        AuthController.log("PRODUCT_UPDATE", f"{data['name']}")
 
     @staticmethod
     def delete(product_id: int):
@@ -486,9 +486,9 @@ class ProductController:
         db.execute("UPDATE products SET is_active=0, barcode=NULL WHERE id=?", (product_id,))
         db.execute("UPDATE product_sale_units SET is_active=0, barcode=NULL WHERE product_id=?", (product_id,))
 
-        message = f"Produit supprimé: id={product_id}"
+        message = (product or {}).get("name") or f"produit n°{product_id}"
         if freed_barcode:
-            message += f", code-barres libéré: {freed_barcode}"
+            message += f" — code-barres {freed_barcode} de nouveau disponible"
         AuthController.log("PRODUCT_DELETE", message)
 
     @staticmethod

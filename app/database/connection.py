@@ -65,6 +65,18 @@ class DatabaseConnection:
         return "INSERT IGNORE" if self.is_mysql() else "INSERT OR IGNORE"
 
     def _translate_placeholders(self, query: str) -> str:
+        """Adapte une requête écrite en style SQLite au pilote MySQL.
+
+        Deux transformations, et l'ordre compte :
+
+        1. Tout « % » littéral devient « %% ». PyMySQL applique un
+           formatage Python à la requête, donc un « % » du SQL lui-même —
+           DATE_FORMAT(col, '%Y-%m'), un motif LIKE 'cash_%' — était pris
+           pour un marqueur et faisait échouer la requête. C'est ce qui
+           cassait la courbe de gain par mois et par année.
+        2. Les « ? » deviennent « %s », les vrais marqueurs de PyMySQL.
+           Produits APRÈS l'échappement, ils ne sont pas doublés à leur tour.
+        """
         if not self.is_mysql():
             return query
 
@@ -77,6 +89,14 @@ class DatabaseConnection:
             if ch == "\\" and not escaped:
                 escaped = True
                 result.append(ch)
+                continue
+
+            if ch == "%":
+                # Échappé partout, y compris entre guillemets : le formatage
+                # de PyMySQL s'applique à la chaîne entière, sans distinguer
+                # ce qui est dans une chaîne SQL de ce qui ne l'est pas.
+                result.append("%%")
+                escaped = False
                 continue
 
             if ch == "'" and not in_double and not escaped:
@@ -100,20 +120,29 @@ class DatabaseConnection:
             "user": MYSQL_USER,
             "password": MYSQL_PASSWORD,
             "charset": MYSQL_CHARSET,
-            "autocommit": False,
+            # Autocommit ON, deliberately. With it off, MySQL's REPEATABLE
+            # READ keeps a connection that only SELECTs pinned to the
+            # snapshot of its first read: the screen then shows stale data
+            # until something writes, and the never-closed transaction holds
+            # locks that block DDL on other connections. Atomicity is not
+            # lost — transaction() opens an explicit one when it needs it.
+            "autocommit": True,
             "cursorclass": DictCursor,
         }
         if include_database:
             kwargs["database"] = MYSQL_DATABASE
         return kwargs
 
-    def _ensure_mysql_database(self) -> None:
-        if not self.is_mysql():
-            return
-        if pymysql is None:
-            raise RuntimeError(
-                "PyMySQL is required for MySQL support. Install it with: pip install PyMySQL"
-            )
+    _MYSQL_UNKNOWN_DATABASE = 1049  # ER_BAD_DB_ERROR
+
+    def _create_mysql_database(self) -> None:
+        """Create the database. Only called when connecting proved it absent.
+
+        Kept off the normal connection path on purpose: this is DDL, and
+        running it on every single connection made each new connection wait
+        for a metadata lock held by any long-lived read transaction — which
+        froze the whole application.
+        """
         conn = pymysql.connect(**self._mysql_connect_kwargs(include_database=False))
         try:
             with conn.cursor() as cursor:
@@ -124,6 +153,19 @@ class DatabaseConnection:
             conn.commit()
         finally:
             conn.close()
+
+    def _connect_mysql(self):
+        if pymysql is None:
+            raise RuntimeError(
+                "PyMySQL is required for MySQL support. Install it with: pip install PyMySQL"
+            )
+        try:
+            return pymysql.connect(**self._mysql_connect_kwargs())
+        except pymysql.err.OperationalError as exc:
+            if not exc.args or exc.args[0] != self._MYSQL_UNKNOWN_DATABASE:
+                raise
+            self._create_mysql_database()
+            return pymysql.connect(**self._mysql_connect_kwargs())
 
     @staticmethod
     def _local_utc_offset() -> str:
@@ -141,8 +183,7 @@ class DatabaseConnection:
     def get_connection(self):
         if not hasattr(self._local, "conn") or self._local.conn is None:
             if self.is_mysql():
-                self._ensure_mysql_database()
-                self._local.conn = pymysql.connect(**self._mysql_connect_kwargs())
+                self._local.conn = self._connect_mysql()
                 with self._local.conn.cursor() as cursor:
                     # Store timestamps in LOCAL time, matching what SQLite does
                     # via datetime('now','localtime'). This must stay aligned
@@ -193,14 +234,15 @@ class DatabaseConnection:
         Nesting is allowed: only the outermost block commits, so a controller
         that already runs inside a transaction can call another one safely.
 
-        No explicit BEGIN is issued. Both backends already keep an implicit
-        transaction open (pymysql with autocommit=False, sqlite3 with its
-        default isolation_level), so a BEGIN here would risk committing that
-        pending work as a side effect. What matters is that nothing commits
-        until this block ends, which the in_transaction guard below enforces.
+        MySQL runs in autocommit mode (see _mysql_connect_kwargs), so the
+        outermost block opens the transaction explicitly. SQLite needs no
+        BEGIN: its driver starts one by itself on the first write and ends it
+        on commit().
         """
         conn = self.get_connection()
         depth = getattr(self._local, "tx_depth", 0)
+        if depth == 0 and self.is_mysql():
+            conn.begin()
         self._local.tx_depth = depth + 1
         try:
             yield conn

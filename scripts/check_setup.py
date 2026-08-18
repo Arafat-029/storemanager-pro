@@ -21,7 +21,7 @@ EXPECTED_TABLES = [
     "products", "product_sale_units", "sales", "sale_items", "sale_payments",
     "stock_movements", "expenses", "product_returns", "user_logs", "settings",
     "supplier_transactions", "supplier_invoices", "supplier_invoice_payments",
-    "supplier_invoice_items",
+    "supplier_invoice_items", "cash_sessions",
 ]
 
 ok = True

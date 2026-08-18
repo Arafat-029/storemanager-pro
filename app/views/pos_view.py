@@ -23,6 +23,8 @@ from app.views.widgets.price_input import PriceSpinBox
 from app.views.widgets.quantity_input import QuantitySpinBox
 from app.views.widgets.screen_fit import clamp_min_size
 from app.views.widgets.quantity_keypad import ask_quantity
+from app.controllers.cash_session_controller import CashSessionController
+from app.views.widgets.receipt_output import print_receipt
 from app.utils.barcode_scanner import BarcodeScannerDialog, SCANNER_AVAILABLE
 from app.views.dialog_theme import (
     apply_dialog_theme,
@@ -105,11 +107,6 @@ def _grid_columns_for_width(width: int) -> int:
 def _normalized_text(value: str | None) -> str:
     return (value or "").strip().lower()
 
-_WEIGHT_CATEGORY_NAMES = {
-    "produits au poids",
-}
-
-
 _SCAN_SYMBOL_TO_DIGIT = {
     "&": "1",
     "é": "2",
@@ -125,18 +122,30 @@ _SCAN_SYMBOL_TO_DIGIT = {
 
 
 def _is_gram_priced_product(product: dict) -> bool:
-    return (
-        _normalized_text(product.get("unit_type")) == "kg"
-        and _normalized_text(product.get("category_name")) in _WEIGHT_CATEGORY_NAMES
-    )
+    """Produit dont la quantité se saisit dans son unité de base.
+
+    Tout ce qui se vend au poids ou au volume : on tape des grammes pour un
+    produit au kilo, des millilitres pour un produit au litre. C'est ce que
+    le caissier lit sur la balance, et ça évite de convertir mentalement
+    250 g en « 0,250 » à chaque client.
+
+    Auparavant seule la catégorie « Produits au poids » en bénéficiait ; les
+    autres produits au kilo se saisissaient en kilos, sans raison.
+    """
+    return _normalized_text(product.get("unit_type")) in ("kg", "litre")
+
+
+def _base_unit_of(product: dict) -> tuple[str, str]:
+    """(unité de saisie, unité de vente) — ex. ('g', 'kg') ou ('ml', 'L')."""
+    return ("ml", "L") if _normalized_text(product.get("unit_type")) == "litre" else ("g", "kg")
 
 
 def _grams_from_quantity(quantity_kg: float) -> int:
     return int(round(float(quantity_kg) * 1000))
 
 
-def _format_grams(value: float | int) -> str:
-    return f"{int(round(float(value)))} g"
+def _format_grams(value: float | int, unit: str = "g") -> str:
+    return f"{int(round(float(value)))} {unit}"
 
 
 def _cart_quantity_text(item: dict) -> str:
@@ -144,7 +153,7 @@ def _cart_quantity_text(item: dict) -> str:
         grams = item.get("display_weight_g")
         if grams is None:
             grams = _grams_from_quantity(item.get("quantity", 0))
-        return _format_grams(grams)
+        return _format_grams(grams, _base_unit_of(item)[0])
     return _format_quantity(item["quantity"], item["unit_type"])
 
 
@@ -153,7 +162,9 @@ def _cart_details_text(item: dict) -> str:
         grams = item.get("display_weight_g")
         if grams is None:
             grams = _grams_from_quantity(item.get("quantity", 0))
-        return f"Poids {_format_grams(grams)}"
+        base_unit = _base_unit_of(item)[0]
+        libelle = "Poids" if base_unit == "g" else "Volume"
+        return f"{libelle} {_format_grams(grams, base_unit)}"
 
     qty = _format_quantity(item["quantity"], "piece")
     pieces_in_sale_unit = float(item.get("stock_quantity_per_unit") or 1.0)
@@ -194,6 +205,56 @@ def _parse_payment_amount_text(raw: str | None) -> float:
         return round(float(clean), 3)
     except ValueError:
         return 0.0
+
+
+class CashAmountLineEdit(QLineEdit):
+    """Saisie du montant remis par le client, en dinars directs.
+
+    On tape la valeur telle qu'on la lit sur les billets : « 10 » vaut
+    10 dinars, « 150 » en vaut 150. La virgule reste possible pour un
+    appoint (« 10,5 »).
+
+    C'est l'inverse de la convention millimes utilisee sur les PRIX (ou
+    « 50 » vaut 0.050 TND) — et c'est voulu : un prix se saisit au millime,
+    tandis qu'un client tend des billets entiers. Confondre les deux
+    obligeait le caissier a taper « 10000 » pour encaisser 10 dinars.
+    """
+
+    _MAX = 999_999.999
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._fresh = True
+        self.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        # Chiffres et un seul separateur decimal, 3 decimales au plus.
+        self.setValidator(QRegularExpressionValidator(
+            QRegularExpression(r"^\d{0,6}([.,]\d{0,3})?$"), self
+        ))
+        self.textEdited.connect(self._on_edited)
+
+    def _on_edited(self, _text: str) -> None:
+        self._fresh = False
+
+    def set_value(self, amount: float) -> None:
+        value = max(0.0, min(self._MAX, float(amount or 0.0)))
+        self.setText(f"{value:.3f}")
+        self._fresh = True
+        self.selectAll()
+
+    def value(self) -> float:
+        return round(_parse_payment_amount_text(self.text()), 3)
+
+    def mark_for_fresh_entry(self) -> None:
+        """La prochaine frappe repart de zero au lieu de s'ajouter."""
+        self._fresh = True
+        self.selectAll()
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        # Le champ arrive pre-rempli avec le total : tout selectionner fait
+        # que la premiere touche remplace, sans avoir a effacer d'abord.
+        if self._fresh:
+            QTimer.singleShot(0, self.selectAll)
 
 
 class MillimeAmountLineEdit(QLineEdit):
@@ -603,15 +664,28 @@ class POSView(QWidget):
             self._delete_setting_value(self._paused_cashier_date_key())
 
     def _cash_expected_summary(self) -> dict:
-        opening_cash = float(self._setting_value(self._opening_cash_setting_key(), "0") or 0.0)
-        summary = SaleController.get_cash_expected_today(
-            opening_cash=opening_cash,
-            user_id=self._current_user_id() if self._is_cashier_user() else None,
-        )
+        """Montants de la session de caisse en cours.
+
+        Calculés depuis la session ouverte (bornée par identifiants de
+        paiement) et non depuis « la journée » : deux caissiers qui se
+        succèdent le même jour ne doivent pas hériter de la caisse de
+        l'autre.
+        """
+        session = self._current_cash_session()
+        if session is None:
+            summary = {"opening_cash": 0.0, "total_received": 0.0, "expected_cash": 0.0}
+        else:
+            summary = CashSessionController.compute_expected(session)
+            summary["session_id"] = session["id"]
         summary["opening_cash_text"] = format_price(summary.get("opening_cash", 0))
         summary["total_received_text"] = format_price(summary.get("total_received", 0))
         summary["expected_cash_text"] = format_price(summary.get("expected_cash", 0))
         return summary
+
+    def _current_cash_session(self) -> dict | None:
+        if not self._is_cashier_user():
+            return None
+        return CashSessionController.get_open_session(self._current_user_id())
 
     def pause_current_shift(self) -> tuple[bool, str]:
         if not self._is_cashier_user():
@@ -627,14 +701,45 @@ class POSView(QWidget):
         return True, ""
 
     def finish_current_shift(self) -> dict:
-        summary = self._cash_expected_summary()
+        """Clôture la caisse : comptage, écart, enregistrement.
+
+        Renvoie le résumé, plus `cancelled=True` si le caissier a renoncé —
+        l'appelant doit alors garder la session ouverte et ne pas fermer
+        l'application.
+        """
+        session = self._current_cash_session()
+        if session is None:
+            return {"cancelled": False, "no_session": True}
+
+        dialog = CashClosingDialog(session, self)
+        if dialog.exec() != QDialog.Accepted:
+            return {"cancelled": True}
+
+        try:
+            closed = CashSessionController.close_session(
+                session["id"], dialog.counted_cash(), dialog.notes()
+            )
+        except Exception as exc:
+            light_critical(self, "Clôture impossible", str(exc))
+            return {"cancelled": True}
+
         if self._paused_cashier_user_id() == self._current_user_id():
             self._delete_setting_value(self._paused_cashier_user_key())
             self._delete_setting_value(self._paused_cashier_date_key())
-        self._delete_setting_value(self._opening_cash_setting_key())
         self._opening_cash_checked_key = ""
         self._update_cash_expected_label()
-        return summary
+
+        difference = round(float(closed.get("difference") or 0.0), 3)
+        return {
+            "cancelled": False,
+            "session_id": closed["id"],
+            "opening_cash_text": format_price(closed.get("opening_cash", 0)),
+            "total_received_text": format_price(closed.get("total_received", 0)),
+            "expected_cash_text": format_price(closed.get("expected_cash", 0)),
+            "counted_cash_text": format_price(closed.get("counted_cash", 0)),
+            "difference": difference,
+            "difference_text": format_price(abs(difference)),
+        }
 
     def _schedule_catalog_restore(self) -> None:
         if self._catalog_restore_scheduled:
@@ -759,25 +864,21 @@ class POSView(QWidget):
         text = (amount_edit.text().strip() or "0").replace(",", ".")
         return text, accepted
 
-    def _opening_cash_setting_key(self) -> str:
-        user_id = int(AuthController.current_user().get("id") or 0)
-        today = datetime.now().date().isoformat()
-        return f"cash_opening:{user_id}:{today}"
-
     def _ensure_opening_cash_initialized(self) -> None:
+        """Ouvre une session de caisse si le caissier n'en a pas déjà une.
+
+        La session ouverte fait foi — plus le réglage journalier d'avant :
+        une prise de poste à cheval sur minuit ne redemande donc plus le
+        fond de caisse en cours de service.
+        """
         if not self._is_cashier_user():
             self._opening_cash_checked_key = ""
             self._update_cash_expected_label()
             return
 
         self._resume_current_cashier_if_paused()
-        key = self._opening_cash_setting_key()
-        if self._opening_cash_checked_key == key:
-            return
-        self._opening_cash_checked_key = key
 
-        existing = self._setting_value(key, "")
-        if existing != "":
+        if CashSessionController.get_open_session(self._current_user_id()):
             self._update_cash_expected_label()
             return
 
@@ -785,7 +886,7 @@ class POSView(QWidget):
         if not ok:
             text = "0"
         opening_cash = _parse_payment_amount_text(text)
-        self._save_setting_value(key, f"{opening_cash:.3f}")
+        CashSessionController.open_session(self._current_user_id(), opening_cash)
         self._update_cash_expected_label()
 
     def _ensure_category_strip_ready(self) -> None:
@@ -1495,9 +1596,7 @@ class POSView(QWidget):
             price_text = f"{format_price(float(piece_lot_unit.get('sale_price') or 0.0))} / lot de {lot_qty}"
         else:
             price_text = format_price(product["sale_price"])
-            if _is_gram_priced_product(product):
-                price_text = f"{price_text} / kg"
-            elif product["unit_type"] == "kg":
+            if product["unit_type"] == "kg":
                 price_text = f"{price_text} / kg"
             elif product["unit_type"] == "litre":
                 price_text = f"{price_text} / L"
@@ -1669,20 +1768,19 @@ class POSView(QWidget):
         self._render_cart()
 
     def _ask_weight(self, product: dict):
-        if _is_gram_priced_product(product):
-            dlg = GramWeightDialog(product, self)
-            if dlg.exec():
-                self._add_to_cart(
-                    product,
-                    dlg.get_quantity(),
-                    pricing_mode="gram",
-                    display_weight_g=dlg.get_weight_grams(),
-                )
-            return
+        """Demande la quantité d'un produit vendu au poids ou au volume.
 
-        dlg = WeightDialog(product, self)
+        Saisie dans l'unité de base (g ou ml) pour tous ces produits : c'est
+        ce que le caissier lit sur la balance. Le stock, lui, reste en kg/L.
+        """
+        dlg = GramWeightDialog(product, self)
         if dlg.exec():
-            self._add_to_cart(product, dlg.get_quantity())
+            self._add_to_cart(
+                product,
+                dlg.get_quantity(),
+                pricing_mode="gram",
+                display_weight_g=dlg.get_weight_grams(),
+            )
 
     def _render_cart(self):
         self._merge_cart_items()
@@ -2027,19 +2125,7 @@ class POSView(QWidget):
             )
             return
 
-        try:
-            if sys.platform == "linux":
-                subprocess.Popen(["xdg-open", pdf_path])
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", pdf_path])
-            else:
-                subprocess.Popen(["start", pdf_path], shell=True)
-        except Exception:
-            light_information(
-                self,
-                "Ticket",
-                f"La vente #{sale_id} est enregistrée.\nTicket sauvegardé :\n{pdf_path}",
-            )
+        print_receipt(self, pdf_path, settings, sale_id)
 
 
 # ─────────────────────────────────────────────────── Dialogs ──
@@ -2048,16 +2134,20 @@ class GramWeightDialog(QDialog):
     def __init__(self, product: dict, parent=None):
         super().__init__(parent)
         self._product = product
-        self.setWindowTitle(f"Poids — {product['name']}")
+        base_unit, sale_unit = _base_unit_of(product)
+        self.setWindowTitle(
+            f"{'Poids' if base_unit == 'g' else 'Volume'} — {product['name']}"
+        )
         self.setFixedWidth(360)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
+        self._base_unit = base_unit
 
         layout.addWidget(QLabel(f"<b>{product['name']}</b>"))
-        layout.addWidget(QLabel(f"Prix : {format_price(product['sale_price'])} / kg"))
-        layout.addWidget(QLabel(f"Soit : {format_price(product['sale_price'] / 1000)} / g"))
+        layout.addWidget(QLabel(f"Prix : {format_price(product['sale_price'])} / {sale_unit}"))
+        layout.addWidget(QLabel(f"Soit : {format_price(product['sale_price'] / 1000)} / {base_unit}"))
 
         form = QFormLayout()
         self._grams_input = QLineEdit()
@@ -2066,8 +2156,14 @@ class GramWeightDialog(QDialog):
         self._grams_input.setText("100")
         self._grams_input.setValidator(QIntValidator(1, 99999, self))
         self._grams_input.setAlignment(Qt.AlignLeft)
+        # Le champ arrive pré-rempli : tout sélectionner pour que la première
+        # touche remplace, sans avoir à effacer d'abord.
+        self._grams_input.selectAll()
         self._grams_input.textChanged.connect(self._update_total_from_text)
-        form.addRow("Poids (g) :", self._grams_input)
+        form.addRow(
+            "Poids (g) :" if base_unit == "g" else "Volume (ml) :",
+            self._grams_input,
+        )
         layout.addLayout(form)
 
         self._total_lbl = QLabel()
@@ -2391,13 +2487,7 @@ class PaymentDialog(QDialog):
         )
         body.addWidget(recv_lbl)
 
-        hint_lbl = QLabel("Tapez les chiffres : ils remplissent les millimes (5 → 0.005, 5000 → 5.000)")
-        hint_lbl.setStyleSheet(
-            "font-size: 11px; color: #94A3B8; background: transparent; border: none;"
-        )
-        body.addWidget(hint_lbl)
-
-        self._paid = MillimeAmountLineEdit()
+        self._paid = CashAmountLineEdit()
         self._paid.setMinimumHeight(54)
         self._paid.set_value(total)
         self._paid.setStyleSheet("font-size: 20px; font-weight: 800;")
@@ -2757,3 +2847,144 @@ class CustomerSelectDialog(QDialog):
 
     def get_customer_id(self):
         return self._selected_id
+
+
+class CashClosingDialog(QDialog):
+    """Comptage de fin de poste.
+
+    Le caissier saisit ce qu'il a réellement compté dans le tiroir ; l'écart
+    avec le montant attendu s'affiche immédiatement, avant validation. Le
+    montant attendu est rappelé à l'écran : masquer cette information
+    n'empêche pas la fraude, mais empêche le caissier honnête de repérer son
+    erreur de comptage.
+    """
+
+    def __init__(self, session: dict, parent=None):
+        super().__init__(parent)
+        self._session = session
+        self._amounts = CashSessionController.compute_expected(session)
+        self._counted = 0.0
+
+        self.setWindowTitle("Clôture de caisse")
+        self.setModal(True)
+        self.setMinimumWidth(430)
+        apply_light_dialog_theme(self)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 22, 24, 22)
+        layout.setSpacing(14)
+
+        title = QLabel("Clôture de caisse")
+        title.setStyleSheet("font-size: 17px; font-weight: 800; color: #0F172A;")
+        layout.addWidget(title)
+
+        recap = QFrame()
+        recap.setStyleSheet(
+            "QFrame { background: #F8FAFC; border: 1.5px solid #E2E8F0; border-radius: 10px; }"
+            "QLabel { background: transparent; border: none; }"
+        )
+        recap_layout = QFormLayout(recap)
+        recap_layout.setContentsMargins(16, 14, 16, 14)
+        recap_layout.setSpacing(8)
+        for libelle, valeur in (
+            ("Fond de caisse :", self._amounts["opening_cash"]),
+            ("Encaissements :", self._amounts["total_received"]),
+        ):
+            v = QLabel(format_price(valeur))
+            v.setStyleSheet("font-weight: 700; color: #334155;")
+            recap_layout.addRow(libelle, v)
+        attendu = QLabel(format_price(self._amounts["expected_cash"]))
+        attendu.setStyleSheet("font-size: 16px; font-weight: 800; color: #0F172A;")
+        recap_layout.addRow("Montant attendu :", attendu)
+        layout.addWidget(recap)
+
+        self._btn_counted = QPushButton()
+        self._btn_counted.setObjectName("cartQtyBtn")
+        self._btn_counted.setMinimumHeight(56)
+        self._btn_counted.setCursor(Qt.PointingHandCursor)
+        self._btn_counted.setToolTip("Appuyer pour saisir le montant compté")
+        self._btn_counted.clicked.connect(self._ask_counted)
+        layout.addWidget(QLabel("Montant réellement compté dans le tiroir :"))
+        layout.addWidget(self._btn_counted)
+
+        self._diff_lbl = QLabel()
+        self._diff_lbl.setAlignment(Qt.AlignCenter)
+        self._diff_lbl.setWordWrap(True)
+        layout.addWidget(self._diff_lbl)
+
+        self._notes = QLineEdit()
+        self._notes.setMinimumHeight(42)
+        self._notes.setPlaceholderText("Remarque (facultatif) : raison d'un écart…")
+        layout.addWidget(self._notes)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        btn_cancel = QPushButton("Annuler")
+        btn_cancel.setObjectName("btnSecondary")
+        btn_cancel.setMinimumHeight(46)
+        btn_cancel.clicked.connect(self.reject)
+        self._btn_ok = QPushButton("Clôturer la caisse")
+        self._btn_ok.setMinimumHeight(46)
+        self._btn_ok.clicked.connect(self._confirm)
+        btn_row.addWidget(btn_cancel, 1)
+        btn_row.addWidget(self._btn_ok, 2)
+        layout.addLayout(btn_row)
+
+        self._refresh()
+
+    def _ask_counted(self):
+        value = ask_quantity(
+            self,
+            "Montant compté dans le tiroir",
+            "TND",
+            allow_decimals=True,
+            initial=self._counted or None,
+            maximum=None,  # un excédent est possible : ne pas plafonner
+        )
+        if value is None:
+            return
+        self._counted = round(float(value), 3)
+        self._refresh()
+
+    def _refresh(self):
+        self._btn_counted.setText(format_price(self._counted))
+        difference = round(self._counted - self._amounts["expected_cash"], 3)
+
+        if self._counted <= 0:
+            self._diff_lbl.setText("Saisissez le montant compté pour voir l'écart.")
+            self._diff_lbl.setStyleSheet("color: #64748B; font-size: 12px;")
+        elif abs(difference) < 0.0005:
+            self._diff_lbl.setText("Caisse juste — aucun écart.")
+            self._diff_lbl.setStyleSheet("color: #059669; font-size: 14px; font-weight: 800;")
+        elif difference < 0:
+            self._diff_lbl.setText(f"Manquant : {format_price(abs(difference))}")
+            self._diff_lbl.setStyleSheet("color: #DC2626; font-size: 14px; font-weight: 800;")
+        else:
+            self._diff_lbl.setText(f"Excédent : {format_price(difference)}")
+            self._diff_lbl.setStyleSheet("color: #D97706; font-size: 14px; font-weight: 800;")
+
+    def _confirm(self):
+        difference = round(self._counted - self._amounts["expected_cash"], 3)
+        if abs(difference) >= 0.0005:
+            # Un écart doit être vu et assumé, pas validé d'un clic distrait.
+            confirme = light_question(
+                self,
+                "Confirmer l'écart",
+                f"Attendu : {format_price(self._amounts['expected_cash'])}\n"
+                f"Compté : {format_price(self._counted)}\n"
+                f"{'Manquant' if difference < 0 else 'Excédent'} : "
+                f"{format_price(abs(difference))}\n\n"
+                "Cet écart sera enregistré et visible par l'administrateur.\n"
+                "Confirmer la clôture ?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if confirme != QMessageBox.Yes:
+                return
+        self.accept()
+
+    def counted_cash(self) -> float:
+        return self._counted
+
+    def notes(self) -> str:
+        return self._notes.text().strip()

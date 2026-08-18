@@ -12,6 +12,11 @@ Rules
   when the pointer happens to sit over a field.
 * Up/Down/PageUp/PageDown never change a *closed* dropdown's value: a combo
   box may only be changed by opening it and picking an option.
+* Entering a spin box selects its whole content, so the first keystroke
+  replaces the value instead of being inserted next to it. Without this the
+  cashier had to erase the existing figure before typing a new one — and a
+  half-erased value ("15" left in front of a typed "3" giving 153) is a very
+  easy mistake to make when serving a customer.
 
 Deliberately left alone
 -----------------------
@@ -38,7 +43,7 @@ typical page change and ~165 ms to the heaviest one, on every visit.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractScrollArea,
     QAbstractSpinBox,
@@ -62,6 +67,16 @@ def _popup_is_open(widget) -> bool:
 def _blocks_value_step(event) -> bool:
     # Alt+Down is the standard "open the list" shortcut — keep it working.
     return event.key() in _VALUE_STEP_KEYS and not (event.modifiers() & Qt.AltModifier)
+
+
+def _select_all_soon(widget) -> None:
+    """Sélectionne tout le contenu d'un champ, au tour d'événement suivant.
+
+    Différé volontairement : après focusInEvent, Qt place lui-même le curseur
+    (et, sur un clic souris, démarre une sélection). Sélectionner tout de
+    suite serait immédiatement écrasé.
+    """
+    QTimer.singleShot(0, lambda: widget.selectAll() if widget else None)
 
 
 def _scroll_enclosing_area(widget, event) -> None:
@@ -91,6 +106,10 @@ class _FieldEventGuard(QObject):
                 return False
             _scroll_enclosing_area(obj, event)
             return True
+
+        if event_type == QEvent.FocusIn and isinstance(obj, QAbstractSpinBox):
+            _select_all_soon(obj)
+            return False  # ne pas consommer : le champ doit prendre le focus
 
         if event_type == QEvent.KeyPress and isinstance(obj, QComboBox):
             if _popup_is_open(obj):
@@ -131,12 +150,19 @@ def install_form_field_guard(app: QApplication | None = None) -> None:
     def spinbox_wheel_event(self, event):
         event.ignore()
 
+    spinbox_focus_in = QAbstractSpinBox.focusInEvent
+
+    def spinbox_focus_in_event(self, event):
+        spinbox_focus_in(self, event)
+        _select_all_soon(self)
+
     QComboBox.wheelEvent = combo_wheel_event
     QComboBox.keyPressEvent = combo_key_press_event
     # QSpinBox/QDoubleSpinBox/QDateEdit inherit these; QDateTimeEdit defines
     # its own wheelEvent, so patching only the base class would miss dates.
     QAbstractSpinBox.wheelEvent = spinbox_wheel_event
     QDateTimeEdit.wheelEvent = spinbox_wheel_event
+    QAbstractSpinBox.focusInEvent = spinbox_focus_in_event
 
 
 def guard_fields_in(root: QWidget) -> None:

@@ -230,8 +230,36 @@ CREATE TABLE IF NOT EXISTS sale_payments (
     created_at          TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
+-- Une session de caisse = une prise de poste : le fond de caisse a
+-- l'ouverture, puis a la fermeture le montant reellement compte et l'ecart
+-- avec ce qui etait attendu. Sans cette trace, une cloture n'est qu'un
+-- affichage : rien ne permet de savoir apres coup ce qu'il y avait dans le
+-- tiroir, ni si un ecart est apparu.
+-- since_payment_id / until_payment_id bornent la session par identifiant de
+-- paiement plutot que par horodatage : les dates n'ont qu'une resolution
+-- d'une seconde, et une session ouverte dans la meme seconde qu'un
+-- encaissement s'attribuait celui du poste precedent.
+CREATE TABLE IF NOT EXISTS cash_sessions (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id           INTEGER NOT NULL REFERENCES users(id),
+    opening_cash      REAL    NOT NULL DEFAULT 0,
+    opened_at         TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+    since_payment_id  INTEGER NOT NULL DEFAULT 0,
+    until_payment_id  INTEGER,
+    closed_at         TEXT,
+    total_received    REAL,
+    expected_cash     REAL,
+    counted_cash      REAL,
+    difference        REAL,
+    notes             TEXT,
+    status            TEXT    NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
+CREATE INDEX IF NOT EXISTS idx_cash_sessions_user ON cash_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_cash_sessions_status ON cash_sessions(status);
+CREATE INDEX IF NOT EXISTS idx_cash_sessions_opened ON cash_sessions(opened_at);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created_at);
 CREATE INDEX IF NOT EXISTS idx_stock_movements_prod ON stock_movements(product_id);
@@ -470,8 +498,29 @@ CREATE TABLE IF NOT EXISTS sale_payments (
     CONSTRAINT fk_sale_payments_receiver_user FOREIGN KEY (receiver_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Voir le commentaire de cash_sessions dans le schema SQLite ci-dessus.
+CREATE TABLE IF NOT EXISTS cash_sessions (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    opening_cash DOUBLE NOT NULL DEFAULT 0,
+    opened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    since_payment_id BIGINT NOT NULL DEFAULT 0,
+    until_payment_id BIGINT NULL,
+    closed_at DATETIME NULL,
+    total_received DOUBLE NULL,
+    expected_cash DOUBLE NULL,
+    counted_cash DOUBLE NULL,
+    difference DOUBLE NULL,
+    notes TEXT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'open',
+    CONSTRAINT fk_cash_sessions_user FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE INDEX idx_products_barcode ON products(barcode);
 CREATE INDEX idx_products_category ON products(category_id);
+CREATE INDEX idx_cash_sessions_user ON cash_sessions(user_id);
+CREATE INDEX idx_cash_sessions_status ON cash_sessions(status);
+CREATE INDEX idx_cash_sessions_opened ON cash_sessions(opened_at);
 CREATE INDEX idx_sale_items_sale ON sale_items(sale_id);
 CREATE INDEX idx_sales_created ON sales(created_at);
 CREATE INDEX idx_stock_movements_prod ON stock_movements(product_id);

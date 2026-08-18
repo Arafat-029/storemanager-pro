@@ -30,6 +30,7 @@ from app.views.expenses_view import ExpensesView
 from app.views.settings_view import SettingsView
 from app.views.dialog_theme import apply_dialog_theme, apply_light_messagebox_theme, light_information, light_warning
 from app.views.widgets.screen_fit import clamp_min_size
+from app.views.widgets.password_prompt import require_password
 from config import APP_NAME, APP_VERSION, ASSETS_DIR
 
 
@@ -178,9 +179,57 @@ class MainWindow(QMainWindow):
     def _can_access_page(self, page_id: str) -> bool:
         return page_id in self._allowed_pages()
 
+    # Nom lisible de chaque page. Sert au titre de la barre supérieure et au
+    # journal d'actions, qui ne doit jamais afficher un identifiant interne.
+    _PAGE_TITLES = {
+        "dashboard": "Tableau de bord",
+        "pos": "Caisse — Point de Vente",
+        "products": "Gestion des produits",
+        "categories": "Catégories",
+        "suppliers": "Fournisseurs",
+        "stock": "Gestion du stock",
+        "sales": "Historique des ventes",
+        "customers": "Clients & Crédits",
+        "expenses": "Dépenses",
+        "users": "Gestion des utilisateurs",
+        "settings": "Paramètres",
+    }
+
+    # Pages redemandant le mot de passe à chaque entrée, et pourquoi.
+    _PROTECTED_PAGES = {
+        "settings": "Les paramètres donnent accès aux sauvegardes de la base, "
+                    "donc à toutes les données du magasin.",
+    }
+
+    def _authorize_page(self, page_id: str) -> bool:
+        """Redemande le mot de passe avant d'ouvrir une page sensible.
+
+        Contrôlé à chaque entrée, jamais mémorisé : quitter la page puis y
+        revenir redemande le mot de passe. C'est le but — sur une caisse, la
+        session admin reste souvent ouverte sans surveillance.
+        """
+        reason = self._PROTECTED_PAGES.get(page_id)
+        if reason is None or page_id == self._current_page:
+            return True
+
+        page_name = self._PAGE_TITLES.get(page_id, page_id)
+        if require_password(self, reason):
+            AuthController.log("ACCESS_GRANTED", f"Accès à « {page_name} »")
+            return True
+
+        AuthController.log("ACCESS_REFUSED", f"Accès à « {page_name} » abandonné")
+        return False
+
     def navigate(self, page_id: str):
         if not self._can_access_page(page_id):
             page_id = "pos"
+
+        if not self._authorize_page(page_id):
+            # On reste où l'on est : le bouton de navigation ne doit pas
+            # laisser croire que la page a été ouverte.
+            for pid, btn in self._nav_buttons.items():
+                btn.setChecked(pid == self._current_page)
+            return
 
         if page_id not in self._pages:
             self._pages[page_id] = self._create_page(page_id)
@@ -190,20 +239,7 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentWidget(page_widget)
         self._current_page = page_id
 
-        titles = {
-            "dashboard": "Tableau de bord",
-            "pos": "Caisse — Point de Vente",
-            "products": "Gestion des produits",
-            "categories": "Catégories",
-            "suppliers": "Fournisseurs",
-            "stock": "Gestion du stock",
-            "sales": "Historique des ventes",
-            "customers": "Clients & Crédits",
-            "expenses": "Dépenses",
-            "users": "Gestion des utilisateurs",
-            "settings": "Paramètres",
-        }
-        self._page_title.setText(titles.get(page_id, page_id))
+        self._page_title.setText(self._PAGE_TITLES.get(page_id, page_id))
 
         for pid, btn in self._nav_buttons.items():
             btn.setChecked(pid == page_id)
@@ -534,15 +570,33 @@ class MainWindow(QMainWindow):
             return
 
         summary = pos_view.finish_current_shift()
-        light_information(
-            self,
-            "Fin de travail",
-            (
-                f"Montant attendu en caisse : {summary.get('expected_cash_text', '0.000 TND')}\n"
-                f"Ouverture : {summary.get('opening_cash_text', '0.000 TND')}\n"
-                f"Encaissements : {summary.get('total_received_text', '0.000 TND')}"
-            ),
-        )
+        if summary.get("cancelled"):
+            # Comptage abandonné : la caisse reste ouverte, on ne ferme pas
+            # l'application — sinon le poste se termine sans clôture.
+            event.ignore()
+            return
+
+        if not summary.get("no_session"):
+            difference = float(summary.get("difference") or 0.0)
+            if abs(difference) < 0.0005:
+                etat = "Caisse juste — aucun écart."
+            elif difference < 0:
+                etat = f"MANQUANT : {summary.get('difference_text')}"
+            else:
+                etat = f"EXCÉDENT : {summary.get('difference_text')}"
+
+            light_information(
+                self,
+                "Caisse clôturée",
+                (
+                    f"Fond de caisse : {summary.get('opening_cash_text', '0.000 TND')}\n"
+                    f"Encaissements : {summary.get('total_received_text', '0.000 TND')}\n"
+                    f"Montant attendu : {summary.get('expected_cash_text', '0.000 TND')}\n"
+                    f"Montant compté : {summary.get('counted_cash_text', '0.000 TND')}\n\n"
+                    f"{etat}\n\n"
+                    "Cette clôture est enregistrée et consultable par l'administrateur."
+                ),
+            )
         return super().closeEvent(event)
 
     def _auto_backup(self):

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QFileDialog,
     QApplication,
+    QCheckBox,
 )
 from PySide6.QtCore import Qt
 
@@ -22,6 +23,7 @@ from app.views.widgets.data_table import DataTable
 from app.database.connection import db
 from app.database.backup import create_backup, list_backups, restore_backup
 from app.controllers.auth_controller import AuthController
+from app.utils import receipt_printer
 
 
 class SettingsView(QWidget):
@@ -82,6 +84,53 @@ class SettingsView(QWidget):
         btn_save_store.clicked.connect(self._save_store)
         store_group.layout().addWidget(btn_save_store, 0, Qt.AlignRight)
         layout.addWidget(store_group)
+
+        # ── Impression des tickets ────────────────────────────────────────
+        print_group = self._make_group("Impression des tickets")
+
+        print_note = QLabel(
+            "Le ticket part directement à l'imprimante après chaque vente, "
+            "sans fenêtre à valider. Laissez « Imprimante par défaut de "
+            "Windows » si vous n'avez qu'une seule imprimante."
+        )
+        print_note.setWordWrap(True)
+        print_note.setStyleSheet("color: #6B7280; font-size: 11px;")
+        print_group.layout().addWidget(print_note)
+
+        print_form = QFormLayout()
+        self._auto_print = QCheckBox("Imprimer le ticket automatiquement après chaque vente")
+        print_form.addRow("", self._auto_print)
+
+        self._printer = QComboBox()
+        self._printer.setMinimumHeight(42)
+        self._printer.currentIndexChanged.connect(self._check_printer_kind)
+        print_form.addRow("Imprimante :", self._printer)
+        print_group.layout().addLayout(print_form)
+
+        self._printer_warning = QLabel()
+        self._printer_warning.setWordWrap(True)
+        self._printer_warning.setVisible(False)
+        self._printer_warning.setStyleSheet(
+            "background: #FEF3C7; color: #92400E; border: 1px solid #FCD34D;"
+            "border-radius: 8px; padding: 10px 12px; font-size: 12px;"
+        )
+        print_group.layout().addWidget(self._printer_warning)
+
+        print_buttons = QHBoxLayout()
+        btn_refresh_printers = QPushButton("Rechercher les imprimantes")
+        btn_refresh_printers.setObjectName("btnSecondary")
+        btn_refresh_printers.clicked.connect(self._load_printers)
+        btn_test_print = QPushButton("Imprimer une page de test")
+        btn_test_print.setObjectName("btnSecondary")
+        btn_test_print.clicked.connect(self._test_print)
+        btn_save_print = QPushButton("Enregistrer")
+        btn_save_print.clicked.connect(self._save_print_settings)
+        print_buttons.addWidget(btn_refresh_printers)
+        print_buttons.addWidget(btn_test_print)
+        print_buttons.addStretch()
+        print_buttons.addWidget(btn_save_print)
+        print_group.layout().addLayout(print_buttons)
+        layout.addWidget(print_group)
 
         backup_group = self._make_group("Sauvegardes")
 
@@ -147,6 +196,11 @@ class SettingsView(QWidget):
         index = self._theme.findData(theme_value)
         self._theme.setCurrentIndex(max(0, index))
 
+        # Impression activée par défaut : une caisse qui n'imprime pas ne
+        # rend pas service, mieux vaut que ce soit à désactiver qu'à trouver.
+        self._auto_print.setChecked(self._settings.get("receipt_auto_print", "1") != "0")
+        self._load_printers(self._settings.get("receipt_printer", ""))
+
     def _save_setting(self, key: str, value: str):
         if db.is_mysql():
             db.execute(
@@ -173,6 +227,104 @@ class SettingsView(QWidget):
             window._apply_theme(selected_theme)
 
         QMessageBox.information(self, "Succès", "Paramètres sauvegardés.")
+
+    # ── Impression ────────────────────────────────────────────────────
+
+    def _load_printers(self, selected: str | None = None) -> None:
+        """Remplit la liste des imprimantes du poste.
+
+        L'entrée vide en tête correspond à « imprimante par défaut de
+        Windows » : c'est le choix qui survit à un changement de matériel,
+        puisqu'il ne fige aucun nom.
+        """
+        wanted = selected if selected is not None else (self._printer.currentData() or "")
+        self._printer.blockSignals(True)
+        self._printer.clear()
+        defaut = receipt_printer.default_printer_name()
+        self._printer.addItem(
+            f"Imprimante par défaut de Windows ({defaut})" if defaut
+            else "Imprimante par défaut de Windows (aucune détectée)",
+            "",
+        )
+        for name in receipt_printer.available_printers():
+            self._printer.addItem(name, name)
+
+        index = self._printer.findData(wanted)
+        if index < 0 and wanted:
+            # L'imprimante enregistrée n'est plus branchée : on la garde
+            # visible plutôt que de la remplacer en douce par une autre.
+            self._printer.addItem(f"{wanted}  (non détectée)", wanted)
+            index = self._printer.count() - 1
+        self._printer.setCurrentIndex(max(0, index))
+        self._printer.blockSignals(False)
+        self._check_printer_kind()
+
+    def _check_printer_kind(self) -> None:
+        """Prévient si l'imprimante retenue produit un fichier au lieu de papier.
+
+        Sur un PC neuf, l'imprimante par défaut de Windows est souvent
+        « Microsoft Print to PDF ». Sans cet avertissement, le caissier
+        découvre le problème en production, avec une fenêtre
+        « Enregistrer sous » à chaque vente.
+        """
+        used = receipt_printer.effective_printer_name(self._printer.currentData() or "")
+        if not used:
+            self._printer_warning.setText(
+                "Aucune imprimante n'est installée sur ce poste : le ticket "
+                "ne pourra pas s'imprimer."
+            )
+            self._printer_warning.setVisible(True)
+            return
+        if receipt_printer.is_virtual_printer(used):
+            self._printer_warning.setText(
+                f"« {used} » n'imprime pas sur papier : elle enregistre un "
+                "fichier PDF et demande où le ranger à chaque vente.\n\n"
+                "Pour une vraie caisse, branchez l'imprimante à tickets et "
+                "sélectionnez-la ci-dessus (ou définissez-la comme imprimante "
+                "par défaut dans Windows)."
+            )
+            self._printer_warning.setVisible(True)
+            return
+        self._printer_warning.setVisible(False)
+
+    def _save_print_settings(self):
+        self._save_setting("receipt_auto_print", "1" if self._auto_print.isChecked() else "0")
+        self._save_setting("receipt_printer", self._printer.currentData() or "")
+        QMessageBox.information(self, "Succès", "Réglages d'impression enregistrés.")
+
+    def _test_print(self):
+        """Imprime le dernier ticket réel, ou une page de test à défaut."""
+        printer_name = self._printer.currentData() or ""
+        try:
+            from app.controllers.sale_controller import SaleController
+            from app.utils.exporter import generate_thermal_receipt
+
+            row = db.fetchone("SELECT MAX(id) AS id FROM sales WHERE status='completed'")
+            sale_id = (row or {}).get("id")
+            if not sale_id:
+                QMessageBox.information(
+                    self,
+                    "Impression de test",
+                    "Aucune vente n'existe encore : enregistrez une vente, "
+                    "puis relancez le test.",
+                )
+                return
+
+            settings = {r["key"]: r["value"]
+                        for r in db.fetchall("SELECT `key` AS `key`, value FROM settings")}
+            pdf_path = generate_thermal_receipt(SaleController.get_by_id(sale_id), settings)
+            used = receipt_printer.print_pdf(pdf_path, printer_name)
+        except Exception as exc:
+            QMessageBox.critical(self, "Impression impossible", str(exc))
+            return
+
+        QMessageBox.information(
+            self,
+            "Impression lancée",
+            f"Le ticket a été envoyé à « {used} ».\n\n"
+            "S'il ne sort pas, vérifiez que l'imprimante est allumée, "
+            "chargée en papier et sélectionnée ci-dessus.",
+        )
 
     def _do_backup(self):
         try:

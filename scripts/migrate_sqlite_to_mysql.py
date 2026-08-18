@@ -13,6 +13,7 @@ from config import DATABASE_PATH
 # points at both.
 TABLE_ORDER = [
     "users",
+    "cash_sessions",
     "categories",
     "suppliers",
     "customers",

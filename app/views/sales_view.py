@@ -9,10 +9,10 @@ from app.views.widgets.data_table import DataTable
 from app.controllers.sale_controller import SaleController
 from app.controllers.auth_controller import AuthController
 from app.utils.helpers import format_price, format_datetime
-from app.utils.exporter import export_to_excel, generate_receipt_pdf
+from app.utils.exporter import export_to_excel, generate_thermal_receipt
 from app.database.connection import db
 from app.views.dialog_theme import apply_light_dialog_theme, light_information, light_question, light_warning
-import subprocess, sys
+from app.views.widgets.receipt_output import print_receipt
 
 
 class SalesView(QWidget):
@@ -193,19 +193,24 @@ class SalesView(QWidget):
             self.refresh()
 
     def _reprint(self):
+        """Réimprime le ticket d'une vente, à l'identique de l'encaissement.
+
+        Passe par le même chemin que la caisse : même format thermique, même
+        imprimante configurée, mêmes messages. L'ancienne version ouvrait le
+        PDF avec la commande « open », qui n'existe que sur macOS — la
+        réimpression échouait donc toujours sous Windows.
+        """
         data = self._table.selected_row_data()
         if not data:
             return
         sale = SaleController.get_by_id(data["id"])
         settings = {r["key"]: r["value"] for r in db.fetchall("SELECT `key` AS `key`, value FROM settings")}
-        pdf = generate_receipt_pdf(sale, settings)
         try:
-            if sys.platform == "linux":
-                subprocess.Popen(["xdg-open", pdf])
-            else:
-                subprocess.Popen(["open", pdf])
-        except Exception:
-            light_information(self, "Ticket", f"Ticket sauvegardé :\n{pdf}")
+            pdf = generate_thermal_receipt(sale, settings)
+        except Exception as exc:
+            light_warning(self, "Ticket non généré", f"Impossible de créer le ticket : {exc}")
+            return
+        print_receipt(self, pdf, settings, sale.get("id"), silent_success=False)
 
     def _export(self):
         if not self._sales:

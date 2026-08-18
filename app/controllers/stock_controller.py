@@ -56,7 +56,11 @@ class StockController:
             raise ValueError("Produit introuvable.")
         delta = new_quantity - product["stock_quantity"]
         ProductController.update_stock(product_id, delta, "adjustment", notes)
-        AuthController.log("STOCK_ADJUST", f"Stock ajusté: produit id={product_id} | {product['stock_quantity']} -> {new_quantity}")
+        AuthController.log(
+            "STOCK_ADJUST",
+            f"{product['name']} — stock corrigé de {float(product['stock_quantity']):g} "
+            f"à {float(new_quantity):g}",
+        )
 
     @staticmethod
     def add_stock(product_id: int, quantity: float, notes: str = "", reference: str = ""):
@@ -244,7 +248,8 @@ class StockController:
 
         AuthController.log(
             "STOCK_LOSS",
-            f"Perte enregistrée: produit id={product_id}, qté={quantity}, motif={label}, coût={total_cost}",
+            f"{product['name']} — {quantity:g} retiré(s) — motif : {label} — "
+            f"coût {total_cost:.3f} TND",
         )
         return {
             "product_name": product["name"],

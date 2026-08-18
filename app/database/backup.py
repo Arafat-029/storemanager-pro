@@ -1,7 +1,9 @@
 from __future__ import annotations
+import os
 import shutil
 import sqlite3
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 
 from config import BACKUP_DIR, DATABASE_PATH
@@ -24,32 +26,82 @@ def create_backup() -> Path:
         _cleanup_old_backups()
         return dest
 
+    # Écrit d'abord dans un fichier temporaire, renommé seulement une fois le
+    # dump complet : une panne en cours d'écriture laisserait sinon une
+    # sauvegarde tronquée que rien ne distingue d'une bonne — et on ne s'en
+    # apercevrait qu'au moment de vouloir restaurer.
     dest = BACKUP_DIR / f"store_backup_{stamp}.sql"
-    conn = db.get_connection()
-    with dest.open("w", encoding="utf-8") as fh:
-        fh.write("SET FOREIGN_KEY_CHECKS=0;\n")
-        tables = [row[f"Tables_in_{conn.db.decode() if isinstance(conn.db, bytes) else conn.db}"] for row in db.fetchall("SHOW TABLES")]
-        for table in tables:
-            create_row = db.fetchone(f"SHOW CREATE TABLE `{table}`")
-            create_sql = create_row.get("Create Table") or create_row.get(f"Create Table `{table}`")
-            fh.write(f"DROP TABLE IF EXISTS `{table}`;\n")
-            fh.write(f"{create_sql};\n")
-            rows = db.fetchall(f"SELECT * FROM `{table}`")
-            for row in rows:
-                columns = ", ".join(f"`{key}`" for key in row.keys())
-                values = ", ".join(_sql_literal(value) for value in row.values())
-                fh.write(f"INSERT INTO `{table}` ({columns}) VALUES ({values});\n")
-        fh.write("SET FOREIGN_KEY_CHECKS=1;\n")
+    partial = dest.with_suffix(".sql.partiel")
+    try:
+        with partial.open("w", encoding="utf-8") as fh:
+            fh.write("SET FOREIGN_KEY_CHECKS=0;\n")
+            for table in _mysql_tables():
+                create_row = db.fetchone(f"SHOW CREATE TABLE `{table}`") or {}
+                create_sql = _row_value(create_row, "Create Table")
+                if not create_sql:
+                    raise RuntimeError(f"Structure illisible pour la table {table}")
+                fh.write(f"DROP TABLE IF EXISTS `{table}`;\n")
+                fh.write(f"{create_sql};\n")
+                for row in db.fetchall(f"SELECT * FROM `{table}`"):
+                    columns = ", ".join(f"`{key}`" for key in row.keys())
+                    values = ", ".join(_sql_literal(value) for value in row.values())
+                    fh.write(f"INSERT INTO `{table}` ({columns}) VALUES ({values});\n")
+            fh.write("SET FOREIGN_KEY_CHECKS=1;\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        partial.replace(dest)
+    except Exception:
+        partial.unlink(missing_ok=True)
+        raise
+
     _cleanup_old_backups()
     return dest
+
+
+def _row_value(row: dict, *preferred_keys: str):
+    """Valeur d'une ligne, quelle que soit la casse de la clé.
+
+    MySQL 8 renvoie les métadonnées en MAJUSCULES là où 5.7 les renvoie en
+    minuscules ; se fier à une casse précise a déjà cassé l'application une
+    fois (voir DatabaseConnection.table_columns).
+    """
+    for key in preferred_keys:
+        for actual, value in row.items():
+            if str(actual).casefold() == key.casefold():
+                return value
+    return None
+
+
+def _mysql_tables() -> list[str]:
+    """Tables de la base courante, sans dépendre du nom de colonne renvoyé.
+
+    `SHOW TABLES` nomme sa colonne « Tables_in_<base> » : la lire par ce nom
+    obligeait à reconstruire le nom de la base à la main. On prend la seule
+    valeur de chaque ligne, ce qui marche quel que soit le nom.
+    """
+    return [str(next(iter(row.values()))) for row in db.fetchall("SHOW TABLES")]
 
 
 def _sql_literal(value) -> str:
     if value is None:
         return "NULL"
+    if isinstance(value, bool):
+        return "1" if value else "0"
     if isinstance(value, (int, float)):
         return str(value)
-    escaped = str(value).replace("\\", "\\\\").replace("'", "\\'")
+    if isinstance(value, (datetime, date)):
+        return f"'{value.isoformat(sep=' ')}'"
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, (bytes, bytearray)):
+        return "0x" + value.hex() if value else "''"
+    escaped = (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("'", "\\'")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+    )
     return f"'{escaped}'"
 
 
