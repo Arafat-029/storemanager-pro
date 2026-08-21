@@ -19,7 +19,11 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from app.views.widgets.price_input import PriceSpinBox
 
-_UI_DIR = Path(__file__).parent
+from config import RESOURCE_DIR
+
+# Les .ui sont chargés à l'exécution : empaquetés, ils ne sont plus à côté
+# de ce fichier mais dans les ressources extraites par PyInstaller.
+_UI_DIR = RESOURCE_DIR / "app" / "ui"
 
 
 def _bind_named_children(target: QWidget, source: QObject | None = None) -> QWidget:

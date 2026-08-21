@@ -40,8 +40,9 @@ print("VERIFICATION DE L'INSTALLATION")
 print("=" * 60)
 
 # 1. Configuration
-env_file = config.BASE_DIR / ".env"
-check("Fichier .env present", env_file.exists(), str(env_file))
+check("Fichier .env present", config.ENV_FILE.is_file(), str(config.ENV_FILE))
+print(f"       ressources = {config.RESOURCE_DIR}")
+print(f"       donnees    = {config.DATA_DIR}")
 print(f"       backend    = {config.DB_BACKEND}")
 if config.DB_BACKEND == "mysql":
     print(f"       serveur    = {config.MYSQL_HOST}:{config.MYSQL_PORT}")

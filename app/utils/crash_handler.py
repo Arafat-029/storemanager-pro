@@ -18,7 +18,9 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
-LOG_DIR = Path(__file__).parent.parent.parent / "data" / "logs"
+from config import LOGS_DIR
+
+LOG_DIR = LOGS_DIR
 LOG_FILE = LOG_DIR / "erreurs.log"
 
 _MESSAGE = (

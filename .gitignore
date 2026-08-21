@@ -28,3 +28,10 @@ data/logs/
 # Sauvegardes de la base : données du magasin + empreintes de mots de passe.
 # Ne doivent jamais être versionnées ni publiées sur un dépôt.
 data/backups/
+
+# Fichiers générés par PyInstaller
+build/
+dist/
+
+# Installateur généré
+installer/Sortie/

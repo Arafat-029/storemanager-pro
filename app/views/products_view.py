@@ -672,7 +672,9 @@ class ProductDialog(QDialog):
         python -m app.ui.compile_ui
     """
 
-    _UI_FILE = Path(__file__).parent.parent / "ui" / "product_dialog.ui"
+    # Nom de fichier seul : c'est ui_loader qui sait où les .ui se trouvent
+    # (dossier du code en développement, ressources embarquées dans l'exe).
+    _UI_FILE = "product_dialog.ui"
 
     def __init__(self, parent=None, product: dict = None, preset_supplier_id: int | None = None):
         super().__init__(parent)
@@ -730,7 +732,7 @@ class ProductDialog(QDialog):
             self._populate(product)
 
     def _load_ui(self):
-        self._ui = embed_ui(self, self._UI_FILE.name)
+        self._ui = embed_ui(self, self._UI_FILE)
 
         # Keep the embedded form surface explicitly light to avoid black areas
         # when the app was previously saved in dark mode.
